@@ -8,7 +8,7 @@ import type { Scan, ScanProfile, Target } from '../lib/types'
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { ErrorState, LoadingState } from '../components/QueryState'
-import { ProfileBadge, StatusBadge } from '../components/badges'
+import { ProfileBadge, RiskBadge, StatusBadge } from '../components/badges'
 
 async function fetchScans(): Promise<Scan[]> {
   const { data } = await api.get<Scan[]>('/scans')
@@ -171,6 +171,7 @@ export default function ScansPage() {
                   <th className="th">Cible</th>
                   <th className="th">Profil</th>
                   <th className="th">Statut</th>
+                  <th className="th">Risque</th>
                   <th className="th">Date</th>
                   <th className="th">
                     <span className="sr-only">Détails</span>
@@ -194,6 +195,9 @@ export default function ScansPage() {
                     </td>
                     <td className="td">
                       <StatusBadge status={scan.status} />
+                    </td>
+                    <td className="td">
+                      <RiskBadge score={scan.risk_score} />
                     </td>
                     <td className="td text-slate-400">{formatDateTime(scan.created_at)}</td>
                     <td className="td text-right">

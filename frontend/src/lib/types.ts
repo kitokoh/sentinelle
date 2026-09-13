@@ -18,6 +18,8 @@ export interface Target {
   kind: TargetKind
   scope_status: ScopeStatus
   authorization_reference: string | null
+  /** Score de risque agrégé 0–100 (0 = non évalué). */
+  risk_score: number
 }
 
 export interface NewTarget {
@@ -39,8 +41,13 @@ export interface Scan {
   created_at: string
   started_at?: string | null
   finished_at?: string | null
+  /** Score de risque 0–100 calculé à partir des constats. */
+  risk_score: number
   target?: Target
 }
+
+/** Outil à l'origine du constat. */
+export type FindingSource = 'nmap' | 'nuclei' | 'nvd' | string
 
 export interface Finding {
   id: number
@@ -49,6 +56,7 @@ export interface Finding {
   service: string
   version: string | null
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info' | string
+  source: FindingSource
   detail: string | null
 }
 

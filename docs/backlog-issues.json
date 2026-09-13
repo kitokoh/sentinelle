@@ -1,0 +1,175 @@
+{
+  "labels": [
+    { "name": "type:feature",  "color": "1f6feb", "description": "Nouvelle capacité" },
+    { "name": "type:security", "color": "d73a4a", "description": "Sécurité de la plateforme elle-même" },
+    { "name": "type:infra",    "color": "8250df", "description": "Infra, CI/CD, conteneurs" },
+    { "name": "type:docs",     "color": "2da44e", "description": "Documentation, communication" },
+    { "name": "type:tests",    "color": "bf8700", "description": "Tests et qualité" },
+    { "name": "priority:high",   "color": "b60205", "description": "Bloquant pour la crédibilité" },
+    { "name": "priority:medium", "color": "fb8500", "description": "Important, pas bloquant" },
+    { "name": "priority:low",    "color": "6e7781", "description": "Nice to have" },
+    { "name": "scope:backend",  "color": "0e8a16", "description": "API / modèles / services" },
+    { "name": "scope:frontend", "color": "5319e7", "description": "Interface web" },
+    { "name": "scope:worker",   "color": "0550ae", "description": "Worker de scan / capteurs" },
+    { "name": "scope:ops",      "color": "57606a", "description": "Docker, CI, déploiement" }
+  ],
+  "milestones": [
+    { "title": "v0.3 — Défense", "description": "Ingestion Suricata/Zeek, règles de détection, page alertes, Alembic." },
+    { "title": "v0.4 — Threat Intel", "description": "Connecteurs MISP/OTX/CERT, corrélation IoC, page veille + carte." },
+    { "title": "v0.5 — Rapports & gouvernance", "description": "Rapports PDF, RBAC fin, journal d'audit, SSO/OIDC, multi-tenant." },
+    { "title": "v0.6 — Production", "description": "Helm, secrets externalisés, chiffrement au repos, monitoring, PRA." },
+    { "title": "Qualité continue", "description": "Transverse : couverture, E2E, gouvernance du dépôt, communication." }
+  ],
+  "issues": [
+    {
+      "title": "Ingestion Suricata (EVE JSON) → alertes normalisées",
+      "milestone": "v0.3 — Défense",
+      "labels": ["type:feature", "priority:high", "scope:worker", "scope:backend"],
+      "body": "## Objectif\nAjouter la première brique défensive : un capteur Suricata dans le lab dont les événements remontent dans Sentinelle.\n\n## Travail\n- Service `sensor` (Suricata) dans docker-compose, profil `lab`\n- Table `Alert` (source, event_type, severity, src/dst ip+port, payload JSON, created_at)\n- Consumer (worker arq ou tâche asyncio) qui tail le fichier EVE JSON et insère\n- Endpoint `GET /api/alerts` (filtres severity, source, période)\n\n## Critères d'acceptation\n- [ ] `docker compose --profile lab up` démarre le capteur\n- [ ] Un scan nmap lancé contre le lab génère des alertes visibles via l'API\n- [ ] Tests : fixture EVE → alertes insérées et filtrables"
+    },
+    {
+      "title": "Moteur de règles de détection (scan de ports, brute-force SSH, beaconing)",
+      "milestone": "v0.3 — Défense",
+      "labels": ["type:feature", "priority:high", "scope:backend"],
+      "body": "## Objectif\nTransformer les events bruts en détections exploitables.\n\n## Travail\n- Règles déclaratives (YAML ou Python) : port_scan (>20 ports distincts / 60 s / même src), ssh_bruteforce (>10 échecs / 5 min), beaconing (connexions périodiques régulières vers même dst)\n- Évaluation à l'ingestion ; sévérité calculée\n\n## Critères d'acceptation\n- [ ] 3 règles actives avec fixtures EVE prouvant déclenchement et non-déclenchement\n- [ ] Une détection crée une `Alert` enrichie (rule_name, confidence)\n- [ ] Doc `docs/DETECTION.md` : comment écrire une règle"
+    },
+    {
+      "title": "Page Alertes dans le front",
+      "milestone": "v0.3 — Défense",
+      "labels": ["type:feature", "priority:high", "scope:frontend"],
+      "body": "## Objectif\nDonner aux alertes une UI à la hauteur du dashboard existant.\n\n## Critères d'acceptation\n- [ ] Entrée sidebar 'Alertes' (icône Siren), badge compteur non acquittées\n- [ ] Liste filtrable (sévérité, source, statut), auto-refresh\n- [ ] Acquittement d'une alerte (PATCH) avec feedback visuel\n- [ ] Typecheck + build verts"
+    },
+    {
+      "title": "Migrations Alembic (remplacer create_all)",
+      "milestone": "v0.3 — Défense",
+      "labels": ["type:infra", "priority:high", "scope:backend", "scope:ops"],
+      "body": "## Objectif\nFiabiliser les évolutions de schéma — prérequis pour toute donnée réelle.\n\n## Critères d'acceptation\n- [ ] Révision initiale = schéma v0.2 exact\n- [ ] `alembic upgrade head` au démarrage de l'API (ou entrypoint)\n- [ ] CI : upgrade testé sur SQLite ET PostgreSQL (service container)\n- [ ] README mis à jour"
+    },
+    {
+      "title": "Rétention et purge configurables des données",
+      "milestone": "v0.3 — Défense",
+      "labels": ["type:feature", "priority:medium", "scope:backend"],
+      "body": "## Objectif\nMaîtriser le volume (constats, alertes) et montrer une hygiène de type RGPD.\n\n## Critères d'acceptation\n- [ ] `RETENTION_DAYS` en config ; job arq périodique de purge\n- [ ] Compteurs de purge journalisés\n- [ ] Tests : données anciennes purgées, récentes conservées"
+    },
+    {
+      "title": "Connecteur MISP (pull IoC)",
+      "milestone": "v0.4 — Threat Intel",
+      "labels": ["type:feature", "priority:medium", "scope:backend"],
+      "body": "## Objectif\nAlerter la plateforme avec du renseignement de menace réel.\n\n## Critères d'acceptation\n- [ ] Table `Ioc` (type, value, source, first_seen, metadata JSON)\n- [ ] Sync planifiée (arq cron) depuis une instance MISP configurée (URL + clé)\n- [ ] Dégradation propre sans connectivité\n- [ ] Tests sur payload MISP mocké"
+    },
+    {
+      "title": "Connecteur AlienVault OTX (pulses)",
+      "milestone": "v0.4 — Threat Intel",
+      "labels": ["type:feature", "priority:medium", "scope:backend"],
+      "body": "## Critères d'acceptation\n- [ ] Pulses souscrits → IoC normalisés (dédup avec MISP)\n- [ ] Clé API en config, jamais en dur\n- [ ] Tests mockés"
+    },
+    {
+      "title": "Connecteur flux CERT (RSS CERT-FR + équivalents)",
+      "milestone": "v0.4 — Threat Intel",
+      "labels": ["type:feature", "priority:medium", "scope:backend"],
+      "body": "## Critères d'acceptation\n- [ ] Agrégation RSS/Atom de plusieurs CERT (liste configurable)\n- [ ] Items de veille stockés avec dédup par GUID\n- [ ] Endpoint `GET /api/intel/feed`"
+    },
+    {
+      "title": "Corrélation IoC ↔ constats et alertes locaux",
+      "milestone": "v0.4 — Threat Intel",
+      "labels": ["type:feature", "priority:high", "scope:backend"],
+      "body": "## Objectif\nLe nerf de la guerre : croiser le renseignement avec l'observé.\n\n## Critères d'acceptation\n- [ ] Match automatique IoC (IP/domaine/hash) ↔ alertes + findings\n- [ ] Un match crée une Alert `source='intel'` sévérité ≥ high\n- [ ] Tests de corrélation sur jeux synthétiques"
+    },
+    {
+      "title": "Page Threat Intel + carte des campagnes",
+      "milestone": "v0.4 — Threat Intel",
+      "labels": ["type:feature", "priority:medium", "scope:frontend"],
+      "body": "## Critères d'acceptation\n- [ ] Entrée sidebar 'Renseignement' : flux CERT, IoC récents, matches\n- [ ] Carte (react-leaflet, tuiles OSM) des origines géolocalisées (données publiques)\n- [ ] Typecheck + build verts"
+    },
+    {
+      "title": "Rapports PDF (synthèse dirigeant + annexe technique)",
+      "milestone": "v0.5 — Rapports & gouvernance",
+      "labels": ["type:feature", "priority:high", "scope:backend", "scope:frontend"],
+      "body": "## Objectif\nLe livrable qu'on pose sur le bureau d'un décideur.\n\n## Critères d'acceptation\n- [ ] `GET /api/scans/{id}/report.pdf` — WeasyPrint (ou typst), template FR\n- [ ] Page 1 : synthèse non-technique (score, top risques, recommandations)\n- [ ] Annexe : tableau complet des constats\n- [ ] Bouton 'Rapport PDF' sur la page scan + page Rapports fonctionnelle\n- [ ] Test : PDF généré, magic bytes, non vide"
+    },
+    {
+      "title": "RBAC fin (admin / analyste / lecteur)",
+      "milestone": "v0.5 — Rapports & gouvernance",
+      "labels": ["type:security", "priority:high", "scope:backend"],
+      "body": "## Critères d'acceptation\n- [ ] Matrice documentée (docs/RBAC.md) : lecteur = lecture seule, analyste = scans, admin = tout + users\n- [ ] Dependencies FastAPI par rôle, appliquées sur toutes les routes\n- [ ] Tests croisés par rôle sur chaque endpoint sensible"
+    },
+    {
+      "title": "Journal d'audit (qui / quoi / quand)",
+      "milestone": "v0.5 — Rapports & gouvernance",
+      "labels": ["type:security", "priority:high", "scope:backend", "scope:frontend"],
+      "body": "## Objectif\nTraçabilité complète — exigence minimale du secteur public.\n\n## Critères d'acceptation\n- [ ] Table AuditLog (actor, action, entity, entity_id, ip, timestamp)\n- [ ] Écriture automatique sur toutes les mutations (middleware ou hooks)\n- [ ] Page admin 'Journal' (lecture seule, filtrable)\n- [ ] Tests : une mutation = une ligne de journal"
+    },
+    {
+      "title": "SSO / OIDC via Keycloak",
+      "milestone": "v0.5 — Rapports & gouvernance",
+      "labels": ["type:feature", "priority:medium", "scope:backend", "scope:ops"],
+      "body": "## Critères d'acceptation\n- [ ] Service keycloak dans compose (profil `sso`) avec realm seed\n- [ ] Flow Authorization Code côté API (authlib), mapping rôles realm → rôles Sentinelle\n- [ ] Auth locale conservée en fallback dev\n- [ ] Doc de configuration"
+    },
+    {
+      "title": "Multi-organisation (tenants)",
+      "milestone": "v0.5 — Rapports & gouvernance",
+      "labels": ["type:feature", "priority:medium", "scope:backend"],
+      "body": "## Critères d'acceptation\n- [ ] `org_id` sur User/Target/Scan/Finding/Alert ; isolation stricte par requête\n- [ ] Tests : aucune fuite cross-tenant (cas négatifs explicites)\n- [ ] Migration Alembic additive"
+    },
+    {
+      "title": "Chart Helm Kubernetes",
+      "milestone": "v0.6 — Production",
+      "labels": ["type:infra", "priority:medium", "scope:ops"],
+      "body": "## Critères d'acceptation\n- [ ] `helm/sentinelle/` : api, worker, web, redis (bitnami), PG externe\n- [ ] Probes readiness/liveness, resources requests/limits\n- [ ] `helm template` valide en CI"
+    },
+    {
+      "title": "Secrets externalisés (Vault ou SOPS)",
+      "milestone": "v0.6 — Production",
+      "labels": ["type:security", "priority:high", "scope:ops"],
+      "body": "## Critères d'acceptation\n- [ ] Aucun secret en clair dans compose/values (vault dev mode ou sops+age)\n- [ ] Rotation documentée\n- [ ] Scan gitleaks en CI, zéro finding"
+    },
+    {
+      "title": "Chiffrement au repos des champs sensibles",
+      "milestone": "v0.6 — Production",
+      "labels": ["type:security", "priority:medium", "scope:backend"],
+      "body": "## Critères d'acceptation\n- [ ] Fernet (cryptography) sur détails de findings et payloads d'alertes\n- [ ] Clé via secret externe, jamais commitée\n- [ ] Tests : données chiffrées en base, lisibles via API"
+    },
+    {
+      "title": "Monitoring Prometheus + Grafana",
+      "milestone": "v0.6 — Production",
+      "labels": ["type:infra", "priority:medium", "scope:ops"],
+      "body": "## Critères d'acceptation\n- [ ] `/metrics` (prometheus-client) : requêtes, scans, jobs en file, échecs\n- [ ] Dashboard Grafana JSON commité\n- [ ] Alerte santé : worker injoignable > 5 min"
+    },
+    {
+      "title": "Tests de charge + plan de reprise (backup/restore PG)",
+      "milestone": "v0.6 — Production",
+      "labels": ["type:infra", "priority:low", "scope:ops"],
+      "body": "## Critères d'acceptation\n- [ ] Script locust/k6 : 100 req/s dashboard sans erreur\n- [ ] pg_dump planifié + procédure de restauration testée et documentée\n- [ ] RPO/RTO annoncés dans README"
+    },
+    {
+      "title": "Couverture backend > 80% avec gate CI",
+      "milestone": "Qualité continue",
+      "labels": ["type:tests", "priority:high", "scope:backend", "scope:ops"],
+      "body": "## Critères d'acceptation\n- [ ] pytest-cov, `--fail-under=80` en CI\n- [ ] Badge coverage dans README\n- [ ] Les modules critiques (scope, security, worker) > 90%"
+    },
+    {
+      "title": "Smoke E2E (Playwright) : login → cible → scan → export",
+      "milestone": "Qualité continue",
+      "labels": ["type:tests", "priority:medium", "scope:frontend", "scope:ops"],
+      "body": "## Critères d'acceptation\n- [ ] Scénario Playwright complet contre la stack compose (scan mocké/stub)\n- [ ] Job CI dédié (services docker)\n- [ ] Artefact vidéo/trace en cas d'échec"
+    },
+    {
+      "title": "Gouvernance du dépôt : signed commits, branch protection, CODEOWNERS",
+      "milestone": "Qualité continue",
+      "labels": ["type:infra", "type:docs", "priority:medium", "scope:ops"],
+      "body": "## Critères d'acceptation\n- [ ] Commits signés (SSH/GPG) + vigilance mode\n- [ ] main protégée : PR + CI verte obligatoires\n- [ ] CODEOWNERS + templates d'issue/PR"
+    },
+    {
+      "title": "Screenshots + GIF de démo dans README",
+      "milestone": "Qualité continue",
+      "labels": ["type:docs", "priority:high", "scope:frontend"],
+      "body": "## Objectif\nUn visiteur (recruteur, cabinet ministériel) juge en 10 secondes.\n\n## Critères d'acceptation\n- [ ] 3 screenshots (dashboard, cibles, scan) + 1 GIF < 2 Mo (login → scan)\n- [ ] Hébergés dans docs/assets, référencés en haut du README"
+    },
+    {
+      "title": "Article technique par release (trame réutilisable)",
+      "milestone": "Qualité continue",
+      "labels": ["type:docs", "priority:medium"],
+      "body": "## Objectif\nLa jambe 'visibilité' du dossier : publier > coder en silence.\n\n## Critères d'acceptation\n- [ ] Trame dans docs/BLOG_TEMPLATE.md (contexte, décision d'archi, difficulté, résultat)\n- [ ] 1 article rédigé pour la v0.2 (nuclei + CVE + scoring)\n- [ ] Lien en README"
+    }
+  ]
+}

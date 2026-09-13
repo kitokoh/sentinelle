@@ -1,4 +1,10 @@
-"""Finding model — a single open port / service discovered by a scan."""
+"""Finding model — a single discovery attached to a scan.
+
+Since v0.2 a finding can come from three sources (see `source`):
+  * nmap   — open port / service discovered by the port scan (port > 0)
+  * nuclei — template match from the nuclei vulnerability scanner (port == 0)
+  * nvd    — CVE enrichment from the NVD API (port == 0, cve_id in `service`)
+"""
 
 from typing import Optional
 
@@ -17,3 +23,4 @@ class Finding(SQLModel, table=True):
     version: str = Field(default="")
     severity: str = Field(default="info")  # info | low | medium | high | critical
     detail: str = Field(default="", sa_column=Column(Text))
+    source: str = Field(default="nmap")  # nmap | nuclei | nvd

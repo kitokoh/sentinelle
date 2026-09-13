@@ -1,6 +1,7 @@
 """Application configuration via pydantic-settings (env vars / .env file)."""
 
 from functools import lru_cache
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,6 +19,8 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "change-me-in-production"
     JWT_EXPIRE_MINUTES: int = 60
     ENV: str = "dev"
+    # v0.2 — optional NVD API key (raises rate limits; lookups work without it).
+    NVD_API_KEY: Optional[str] = None
 
 
 @lru_cache

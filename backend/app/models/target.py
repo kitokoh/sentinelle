@@ -21,3 +21,5 @@ class Target(SQLModel, table=True):
     authorization_reference: Optional[str] = None
     owner_id: int = Field(foreign_key="users.id", index=True)
     created_at: datetime = Field(default_factory=utcnow)
+    # v0.2 — risk score of the latest completed scan against this target.
+    risk_score: float = Field(default=0.0)

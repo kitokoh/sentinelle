@@ -16,7 +16,7 @@ import { formatDateTime, formatNumber, PROFILE_LABELS } from '../lib/format'
 import type { DashboardStats } from '../lib/types'
 import PageHeader from '../components/PageHeader'
 import StatCard from '../components/StatCard'
-import { StatusBadge } from '../components/badges'
+import { RiskBadge, StatusBadge } from '../components/badges'
 import EmptyState from '../components/EmptyState'
 import { ErrorState, LoadingState } from '../components/QueryState'
 
@@ -176,6 +176,7 @@ export default function DashboardPage() {
                         <th className="th">Cible</th>
                         <th className="th">Profil</th>
                         <th className="th">Statut</th>
+                        <th className="th">Risque</th>
                         <th className="th">Date</th>
                         <th className="th">
                           <span className="sr-only">Détails</span>
@@ -201,6 +202,9 @@ export default function DashboardPage() {
                           </td>
                           <td className="td">
                             <StatusBadge status={scan.status} />
+                          </td>
+                          <td className="td">
+                            <RiskBadge score={scan.risk_score} size="sm" />
                           </td>
                           <td className="td text-slate-400">{formatDateTime(scan.created_at)}</td>
                           <td className="td text-right">

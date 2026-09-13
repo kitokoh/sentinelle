@@ -88,3 +88,54 @@ export function ProfileBadge({ profile }: { profile: string }) {
       : 'border-slate-700 bg-slate-800 text-slate-400'
   return <span className={`badge ${classes}`}>{label}</span>
 }
+
+/* ---------- Source d'un constat ---------- */
+
+const SOURCE_META: Record<string, string> = {
+  nmap: 'border-cyan-400/40 bg-cyan-400/5 text-cyan-400',
+  nuclei: 'border-violet-400/40 bg-violet-400/10 text-violet-400',
+  nvd: 'border-orange-400/40 bg-orange-400/10 text-orange-400',
+}
+
+export function SourceBadge({ source }: { source: string }) {
+  const classes = SOURCE_META[source] ?? 'border-slate-700 bg-slate-800 text-slate-400'
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${classes}`}
+    >
+      {source}
+    </span>
+  )
+}
+
+/* ---------- Score de risque (0–100) ---------- */
+
+const RISK_LEVELS: { min: number; label: string; classes: string }[] = [
+  { min: 70, label: 'critique', classes: 'border-red-400/30 bg-red-400/10 text-red-400' },
+  { min: 40, label: 'élevé', classes: 'border-orange-400/30 bg-orange-400/10 text-orange-400' },
+  { min: 20, label: 'modéré', classes: 'border-amber-400/30 bg-amber-400/10 text-amber-400' },
+  { min: 1, label: 'faible', classes: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-400' },
+]
+
+interface RiskBadgeProps {
+  score: number
+  /** `sm` pour les tableaux denses (tableau de bord). */
+  size?: 'md' | 'sm'
+}
+
+export function RiskBadge({ score, size = 'md' }: RiskBadgeProps) {
+  const sizeClasses = size === 'sm' ? 'px-1.5 py-0 text-[10px]' : ''
+  if (!score || score <= 0) {
+    return (
+      <span className={`badge border-slate-700 bg-slate-800 text-slate-500 ${sizeClasses}`}>
+        —
+      </span>
+    )
+  }
+  const level = RISK_LEVELS.find((l) => score >= l.min) ?? RISK_LEVELS[RISK_LEVELS.length - 1]
+  return (
+    <span className={`badge tabular-nums ${level.classes} ${sizeClasses}`}>
+      {score} · {level.label}
+    </span>
+  )
+}

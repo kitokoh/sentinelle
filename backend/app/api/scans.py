@@ -1,11 +1,14 @@
 """Scan routes: enqueue nmap jobs (only for in-scope targets) and read results."""
 
+import csv
+import io
 from datetime import datetime
 from typing import Literal, Optional
 
 import arq
 from arq.connections import RedisSettings
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -32,6 +35,7 @@ class ScanRead(BaseModel):
     started_at: Optional[datetime]
     finished_at: Optional[datetime]
     error: Optional[str]
+    risk_score: float
 
 
 class ScanWithTarget(ScanRead):
@@ -47,6 +51,7 @@ class FindingRead(BaseModel):
     version: str
     severity: str
     detail: str
+    source: str
 
 
 class ScanDetail(ScanRead):
@@ -136,4 +141,53 @@ async def get_scan(
         target_name=target.name,
         target_value=target.value,
         findings=[FindingRead(**finding.model_dump()) for finding in result.all()],
+    )
+
+
+CSV_HEADER = ["source", "port", "protocol", "service", "version", "severity", "detail"]
+
+
+@router.get("/{scan_id}/export")
+async def export_scan_findings(
+    scan_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """Export one owned scan's findings as a CSV attachment (v0.2)."""
+    scan = await session.get(Scan, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
+    target = await session.get(Target, scan.target_id)
+    if target is None or target.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
+
+    result = await session.exec(
+        select(Finding)
+        .where(Finding.scan_id == scan.id)
+        .order_by(Finding.source, Finding.port, Finding.id)
+    )
+
+    # The csv module handles quoting of fields containing commas/quotes/newlines.
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(CSV_HEADER)
+    for finding in result.all():
+        writer.writerow(
+            [
+                finding.source,
+                finding.port,
+                finding.protocol,
+                finding.service,
+                finding.version,
+                finding.severity,
+                finding.detail,
+            ]
+        )
+
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="scan_{scan_id}_findings.csv"'
+        },
     )

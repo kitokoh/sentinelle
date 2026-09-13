@@ -41,7 +41,38 @@ arq app.worker.settings.WorkerSettings
 ```
 
 Docker: `Dockerfile` builds the API image, `Dockerfile.worker` builds the
-worker image (includes nmap).
+worker image (includes nmap and nuclei).
+
+## v0.2 — audit de vulnérabilités
+
+On top of the nmap port scan, the worker now enriches every scan with:
+
+- **nuclei** template findings (`source: "nuclei"`) — severity-filtered by
+  profile (`quick`: critical+high, `full`: all severities).
+- **NVD CVE enrichment** (`source: "nvd"`) — up to 5 distinct
+  `(service, version)` pairs from the nmap findings are looked up against the
+  NVD API 2.0 (top 3 CVEs each, cached in-process).
+- **Risk scoring** — `scan.risk_score` (0-100: critical 15, high 8, medium 3,
+  low 1, info 0, capped at 100) is computed over all findings and mirrored
+  onto `target.risk_score`.
+- **CSV export** — `GET /api/scans/{id}/export` downloads
+  `scan_<id>_findings.csv` (owner-only, auth required).
+
+Local-dev notes:
+
+- **nuclei is optional locally.** If the `nuclei` binary is not on `PATH`, the
+  step is skipped and scans still succeed (the worker logs
+  "nuclei not installed"). The Docker worker image ships nuclei v3.3.7 pinned,
+  with templates pre-fetched at build time.
+- **`NVD_API_KEY` is optional.** Without it, NVD lookups run anonymously
+  (lower rate limits). Any NVD failure (network, rate limit, parse) is
+  silently ignored — NVD can never break a scan.
+- **DB reset after pulling v0.2.** The dev DB is created via `create_all`
+  (no Alembic yet), so the new columns require a fresh database:
+
+  ```bash
+  rm -f sentinelle.db
+  ```
 
 ## The scope guardrail (`app/services/scope.py`)
 
@@ -67,9 +98,11 @@ app/
   db.py              async engine, get_session dependency, init_db
   models/            User, Target, Scan, Finding (SQLModel tables)
   services/scope.py  THE GUARDRAIL — validate_target()
-  services/scanner.py async nmap wrapper (XML stdout -> findings)
-  api/               auth, targets, scans, dashboard routers + deps
-  worker/            arq settings + run_scan job
+  services/scanner.py async nmap + nuclei wrappers (XML/JSONL stdout -> findings)
+  services/nvd.py    NVD API 2.0 client (best-effort CVE lookup, cached)
+  services/risk.py   severity weights -> 0-100 risk score
+  api/               auth, targets, scans (incl. CSV export), dashboard routers + deps
+  worker/            arq settings + run_scan job (nmap, nuclei, NVD, scoring)
 seed.py              demo data
-tests/               pytest suite (guardrail, auth, targets/scans)
+tests/               pytest suite (guardrail, auth, targets, nvd, nuclei, risk, export, worker)
 ```

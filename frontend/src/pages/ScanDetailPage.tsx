@@ -1,13 +1,14 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Bug, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Bug, Download, Loader2, ShieldCheck } from 'lucide-react'
 import { api, getApiErrorMessage } from '../lib/api'
 import { formatDateTime, PROFILE_LABELS } from '../lib/format'
 import type { ScanDetail } from '../lib/types'
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { ErrorState, LoadingState } from '../components/QueryState'
-import { SeverityBadge, StatusBadge } from '../components/badges'
+import { RiskBadge, SeverityBadge, SourceBadge, StatusBadge } from '../components/badges'
 
 async function fetchScan(id: string): Promise<ScanDetail> {
   const { data } = await api.get<ScanDetail>(`/scans/${id}`)
@@ -16,6 +17,8 @@ async function fetchScan(id: string): Promise<ScanDetail> {
 
 export default function ScanDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['scans', id],
@@ -27,6 +30,27 @@ export default function ScanDetailPage() {
       return status === 'pending' || status === 'running' ? 3_000 : false
     },
   })
+
+  /** Télécharge les constats au format CSV via l'endpoint dédié (blob). */
+  async function handleExport() {
+    setExportError(null)
+    setExporting(true)
+    try {
+      const response = await api.get(`/scans/${id}/export`, { responseType: 'blob' })
+      const url = URL.createObjectURL(response.data as Blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `scan_${id}_findings.csv`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setExportError('Export impossible — réessayez dans un instant.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div>
@@ -72,8 +96,9 @@ export default function ScanDetailPage() {
               </div>
               <div>
                 <dt className="label mb-1">Statut</dt>
-                <dd>
+                <dd className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={data.status} />
+                  <RiskBadge score={data.risk_score} />
                 </dd>
               </div>
               <div>
@@ -95,14 +120,36 @@ export default function ScanDetailPage() {
 
           {/* Constats */}
           <section className="panel">
-            <div className="border-b border-slate-800 px-5 py-4">
-              <h2 className="text-sm font-semibold text-slate-200">
-                Constats ({data.findings.length})
-              </h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Ports ouverts, services exposés et sévérité associée.
-              </p>
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 px-5 py-4">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-200">
+                  Constats ({data.findings.length})
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Ports ouverts, services exposés et sévérité associée.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={exporting}
+                className="btn-ghost text-xs"
+              >
+                {exporting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                Exporter CSV
+              </button>
             </div>
+
+            {exportError ? (
+              <div className="mx-5 mt-4 flex items-start gap-2 rounded-md border border-red-400/30 bg-red-400/10 px-3 py-2.5 text-sm text-red-400">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{exportError}</span>
+              </div>
+            ) : null}
 
             {data.findings.length === 0 ? (
               <EmptyState
@@ -123,6 +170,7 @@ export default function ScanDetailPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-slate-800">
+                      <th className="th">Source</th>
                       <th className="th">Port</th>
                       <th className="th">Proto</th>
                       <th className="th">Service</th>
@@ -134,6 +182,9 @@ export default function ScanDetailPage() {
                   <tbody>
                     {data.findings.map((finding) => (
                       <tr key={finding.id} className="transition-colors hover:bg-slate-800/40">
+                        <td className="td">
+                          <SourceBadge source={finding.source} />
+                        </td>
                         <td className="td font-mono text-xs font-semibold text-slate-200">
                           {finding.port}
                         </td>

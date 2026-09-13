@@ -6,7 +6,7 @@ import type { NewTarget, Target, TargetKind } from '../lib/types'
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { ErrorState, LoadingState } from '../components/QueryState'
-import { KindBadge, ScopeBadge } from '../components/badges'
+import { KindBadge, RiskBadge, ScopeBadge } from '../components/badges'
 
 interface TargetFormState {
   name: string
@@ -204,6 +204,7 @@ export default function TargetsPage() {
                   <th className="th">Valeur</th>
                   <th className="th">Type</th>
                   <th className="th">Périmètre</th>
+                  <th className="th">Risque</th>
                   <th className="th">Réf. d'autorisation</th>
                   <th className="th">
                     <span className="sr-only">Actions</span>
@@ -220,6 +221,9 @@ export default function TargetsPage() {
                     </td>
                     <td className="td">
                       <ScopeBadge status={target.scope_status} />
+                    </td>
+                    <td className="td">
+                      <RiskBadge score={target.risk_score} />
                     </td>
                     <td className="td font-mono text-xs text-slate-500">
                       {target.authorization_reference ?? '—'}

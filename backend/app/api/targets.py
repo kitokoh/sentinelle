@@ -31,6 +31,7 @@ class TargetRead(BaseModel):
     scope_status: str
     authorization_reference: Optional[str]
     created_at: datetime
+    risk_score: float
 
 
 @router.post("", response_model=TargetRead, status_code=status.HTTP_201_CREATED)

@@ -1,14 +1,19 @@
-"""Thin async wrapper around nmap.
+"""Thin async wrappers around nmap and nuclei.
 
-Runs `nmap -oX - --top-ports 100 -sV -T4 <target>` (profile "quick") or the
-same with `-p-` instead of `--top-ports 100` (profile "full"), then parses
+nmap runs `nmap -oX - --top-ports 100 -sV -T4 <target>` (profile "quick") or
+the same with `-p-` instead of `--top-ports 100` (profile "full"), then parses
 the XML written to stdout into structured finding dicts.
+
+nuclei (v0.2) runs `nuclei -u <target> -jsonl -silent -rl 50 -timeout 10`
+with a profile-dependent severity filter, then parses the JSONL stdout lines
+into finding dicts (port 0, protocol "http").
 
 Only ever called by the worker, and only on targets whose scope_status is
 "allowed" (enforced by the API layer + services/scope.py guardrail).
 """
 
 import asyncio
+import json
 import xml.etree.ElementTree as ET
 from typing import Optional
 
@@ -116,3 +121,99 @@ async def run_nmap_scan(target_value: str, profile: str = "quick") -> list[dict]
         )
 
     return parse_nmap_xml(stdout.decode(errors="replace"))
+
+
+# ---------------------------------------------------------------------------
+# nuclei (v0.2)
+# ---------------------------------------------------------------------------
+
+# nuclei severities are already on our scale; anything unexpected degrades to info.
+_NUCLEI_SEVERITY_MAP = {
+    "critical": "critical",
+    "high": "high",
+    "medium": "medium",
+    "low": "low",
+    "info": "info",
+}
+
+
+def parse_nuclei_line(line: str) -> dict | None:
+    """Parse one JSONL line from `nuclei -jsonl` into a finding dict.
+
+    Pure function (no I/O, no nuclei binary needed) so it can be unit-tested.
+    Returns None for blank or unparseable lines so callers can stream-filter.
+    """
+    line = line.strip()
+    if not line:
+        return None
+    try:
+        data = json.loads(line)
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    info = data.get("info") or {}
+    if not isinstance(info, dict):
+        info = {}
+
+    template_id = (
+        data.get("template-id") or data.get("templateID") or data.get("template") or ""
+    )
+    name = info.get("name") or ""
+    severity = _NUCLEI_SEVERITY_MAP.get(str(info.get("severity") or "info").lower(), "info")
+
+    matched_at = data.get("matched-at") or data.get("matched") or data.get("host") or ""
+    matcher_name = data.get("matcher-name") or ""
+    detail = " — ".join(part for part in (str(matched_at), str(matcher_name)) if part)
+
+    return {
+        "port": 0,
+        "protocol": "http",
+        "service": template_id or name,
+        "version": "",
+        "severity": severity,
+        "detail": detail,
+    }
+
+
+async def run_nuclei_scan(target_value: str, profile: str = "quick") -> list[dict]:
+    """Run nuclei against `target_value` and return parsed template findings.
+
+    Severity filter: "quick" keeps critical+high, "full" keeps everything.
+    Raises RuntimeError("nuclei not installed") when the binary is missing and
+    RuntimeError with the stderr tail on any non-zero exit — the caller
+    (worker) treats every RuntimeError as non-fatal.
+    """
+    severities = "critical,high,medium,low,info" if profile == "full" else "critical,high"
+    command = [
+        "nuclei",
+        "-u", target_value,
+        "-jsonl",
+        "-silent",
+        "-rl", "50",
+        "-timeout", "10",
+        "-severity", severities,
+    ]
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("nuclei not installed") from exc
+
+    stdout, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        tail = stderr.decode(errors="replace").strip()[-500:]
+        raise RuntimeError(f"nuclei exited with code {process.returncode}: {tail}")
+
+    findings: list[dict] = []
+    for line in stdout.decode(errors="replace").splitlines():
+        finding = parse_nuclei_line(line)
+        if finding is not None:
+            findings.append(finding)
+    return findings

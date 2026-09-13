@@ -21,3 +21,5 @@ class Scan(SQLModel, table=True):
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     error: Optional[str] = None
+    # v0.2 — aggregate severity score over all findings of this scan (0-100).
+    risk_score: float = Field(default=0.0)

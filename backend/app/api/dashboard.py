@@ -77,6 +77,7 @@ async def get_stats(
             "status": scan.status,
             "created_at": scan.created_at,
             "finished_at": scan.finished_at,
+            "risk_score": scan.risk_score,
         }
         for scan, target in last_scans_rows
     ]
