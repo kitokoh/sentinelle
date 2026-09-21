@@ -57,12 +57,15 @@ def upgrade() -> None:
     )
     op.create_index("ix_organizations_slug", "organizations", ["slug"], unique=True)
 
+    # The bind processors come from *this* lightweight table definition, not from
+    # the real table created above — so the type here must carry the timezone too,
+    # or asyncpg refuses the aware datetime before it ever reaches the column.
     organizations = sa.table(
         "organizations",
         sa.column("id", sa.Integer),
         sa.column("name", sa.String),
         sa.column("slug", sa.String),
-        sa.column("created_at", sa.DateTime),
+        sa.column("created_at", sa.DateTime(timezone=True)),
     )
     op.bulk_insert(
         organizations,
