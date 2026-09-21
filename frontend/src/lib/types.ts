@@ -58,7 +58,13 @@ export interface Scan {
   finished_at?: string | null
   /** Score de risque 0–100 calculé à partir des constats. */
   risk_score: number
-  target?: Target
+  /**
+   * Nom et valeur de la cible, **aplatis** par l'API (`ScanWithTarget` /
+   * `ScanDetail`). Il n'y a pas d'objet `target` imbriqué : le front lisait un
+   * champ inexistant et affichait « Cible #N » à la place du nom.
+   */
+  target_name: string
+  target_value: string
 }
 
 /** Outil à l'origine du constat. */

@@ -1,4 +1,4 @@
-.PHONY: up down logs seed test migrate migration sensor sso monitoring secrets-init secrets-edit secrets-export rotate-key rules dev-api dev-web dev-worker
+.PHONY: up down logs seed seed-demo test coverage e2e screenshots migrate migration sensor sso monitoring secrets-init secrets-edit secrets-export rotate-key rules dev-api dev-web dev-worker
 
 up:            ## Build et lance toute la stack
 	docker compose up -d --build
@@ -14,6 +14,18 @@ seed:          ## Crée le compte démo + cible lab
 
 test:          ## Tests backend
 	cd backend && pytest -q
+
+seed-demo:     ## Remplit la base locale de données de démonstration
+	cd backend && python seed_demo.py
+
+e2e:           ## Smoke E2E Playwright (nécessite la pile démarrée)
+	cd frontend && npm run e2e
+
+screenshots:   ## Régénère les captures et le GIF du README
+	./scripts/capture-screenshots.sh
+
+coverage:      ## Couverture de tests avec barrière (identique à la CI)
+	cd backend && pytest -q --cov=app --cov-report=term-missing:skip-covered --cov-config=.coveragerc
 
 migrate:       ## Applique les migrations Alembic (base locale)
 	cd backend && alembic upgrade head

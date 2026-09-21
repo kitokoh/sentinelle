@@ -1,0 +1,10 @@
+# Une question de déploiement n'est pas une anomalie : les orienter évite de
+# polluer le suivi avec des tickets qui ne se fermeront jamais.
+blank_issues_enabled: true
+contact_links:
+  - name: Documenter une faille de sécurité
+    url: https://github.com/kitokoh/sentinelle/blob/main/SECURITY.md
+    about: Ne pas ouvrir d'issue publique — voir SECURITY.md.
+  - name: Comprendre l'architecture
+    url: https://github.com/kitokoh/sentinelle/blob/main/docs/ARCHITECTURE.md
+    about: Composants, flux et modèle de données.

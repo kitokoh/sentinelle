@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Sentinelle API",
     description="Sovereign security-audit & cyber-defense demo platform (authorized targets only).",
-    version="0.6.0",
+    version="0.7.0",
     docs_url="/docs",
     lifespan=lifespan,
 )

@@ -111,7 +111,7 @@ export default function Layout() {
             Diffusion restreinte
           </p>
           <p className="mt-1 text-xs text-slate-600">
-            {organization ? organization.name : 'Sentinelle'} · v0.5
+            {organization ? organization.name : 'Sentinelle'} · v0.7
           </p>
         </div>
       </aside>

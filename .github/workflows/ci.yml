@@ -42,6 +42,18 @@ jobs:
       - name: Run tests (${{ matrix.database }})
         working-directory: backend
         run: pytest -q
+      # La barrière ne s'applique qu'au moteur SQLite : le seuil porte sur le code
+      # de l'application, pas sur le dialecte, et une seule mesure suffit.
+      - name: Coverage gate (${{ matrix.database }})
+        if: matrix.database == 'sqlite'
+        working-directory: backend
+        run: |
+          pytest -q --cov=app --cov-report=term-missing:skip-covered --cov-config=.coveragerc
+          # Les modules critiques sont vérifiés séparément : la moyenne globale
+          # peut rester au-dessus de 80 % alors qu'un module essentiel décroche.
+          pytest -q --cov=app.core.security --cov=app.services.scope --cov=app.worker \
+            --cov-report=term --cov-config=.coveragerc --cov-fail-under=90 --no-header \
+            > /dev/null
 
   # v0.3 (#4) — the migration series must be replayable on SQLite *and* PostgreSQL
   # before a schema change can ever reach a real deployment.
@@ -137,6 +149,79 @@ jobs:
             --set postgresql.password=ci-password \
             --set secret.jwtSecret=ci-jwt-secret \
             --set redis.enabled=false > /dev/null
+
+  # Issue #22 : smoke E2E contre la pile Compose. Le scénario exerce la plomberie
+  # de bout en bout — nginx, proxy /api, API, base, export — ce qu'aucun test
+  # unitaire ne peut faire.
+  #
+  # Le worker n'est PAS démarré : son image télécharge les templates nuclei au
+  # build (plusieurs minutes) pour un résultat sans intérêt ici, puisque
+  # l'exécution d'un scan est déjà couverte par `backend/tests/test_worker.py` avec
+  # les scanners simulés. La CI vérifie donc qu'un scan est demandé et enregistré,
+  # pas qu'il s'exécute.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start the stack (db, redis, api, web)
+        run: docker compose up -d --build db redis api web
+
+      - name: Wait for the API
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -sf -m 2 http://localhost:8000/api/health > /dev/null; then
+              echo "API prête après ${attempt} tentative(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "L'API n'a jamais répondu" >&2
+          docker compose logs --tail=100 api
+          exit 1
+
+      - name: Seed demo data
+        run: docker compose exec -T api python seed_demo.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the smoke scenario
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:3000   # le service `web` (nginx)
+        run: npx playwright test e2e/smoke.spec.ts
+
+      # Un test rouge en CI qu'on ne peut pas relancer n'a de valeur que si on
+      # sait pourquoi il est rouge : trace, capture et journaux de la pile.
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          retention-days: 7
+
+      - name: Stack logs
+        if: failure()
+        run: docker compose logs --tail=200
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
 
   frontend:
     runs-on: ubuntu-latest

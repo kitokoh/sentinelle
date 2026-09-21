@@ -24,6 +24,8 @@ redis==4.6.0
 # Tests
 pytest==8.3.4
 pytest-asyncio==0.24.0
+# Couverture et barrière CI (v0.7 — issue #21)
+pytest-cov==6.0.0
 
 # Schema migrations (v0.3 — issue #4)
 alembic==1.14.0

@@ -16,6 +16,23 @@ dans le secteur public : technique **et** doctrine.
 
 ---
 
+## Aperçu
+
+| Tableau de bord | Cibles | Détail d'un scan |
+|---|---|---|
+| ![Tableau de bord](docs/assets/dashboard.png) | ![Cibles](docs/assets/cibles.png) | ![Détail d'un scan](docs/assets/scan.png) |
+
+![Parcours de démonstration : connexion → tableau de bord → cibles → scan → alertes](docs/assets/demo.gif)
+
+| Alertes | Renseignement | Journal d'audit |
+|---|---|---|
+| ![Alertes](docs/assets/alertes.png) | ![Renseignement](docs/assets/renseignement.png) | ![Journal d'audit](docs/assets/journal.png) |
+
+*Captures produites contre l'instance réelle, alimentée par `backend/seed_demo.py`
+(`make screenshots`). Aucune maquette.*
+
+---
+
 ## Fonctionnalités
 
 ### v0.1 — Socle
@@ -162,6 +179,7 @@ sentinelle/
 │       └── worker/     # jobs arq : run_scan, ingest_eve, purge, sync_*, correlate
 ├── frontend/           # SPA React/TS (dashboard, cibles, scans, alertes,
 │                       #   renseignement, rapports, journal, doctrine)
+│   └── e2e/            # smoke Playwright + captures d'écran
 ├── deploy/
 │   ├── keycloak/       # realm SSO de démonstration (#14)
 │   ├── monitoring/     # Prometheus, règles d'alerte, tableau de bord Grafana (#19)
@@ -174,6 +192,12 @@ sentinelle/
 │   ├── MONITORING.md   # métriques, tableau de bord, runbooks d'alerte
 │   ├── SECRETS.md      # inventaire des secrets et procédures de rotation
 │   ├── PRA.md          # plan de reprise, RPO/RTO, exercices de restauration
+│   ├── GOVERNANCE.md   # protection de branche, commits signés, contribution
+│   ├── RBAC.md         # matrice des rôles et frontières entre organisations
+│   ├── SECRETS.md      # inventaire des secrets et procédures de rotation
+│   ├── BLOG_TEMPLATE.md # trame des articles techniques
+│   ├── blog/           # articles publiés, un par version
+│   └── assets/         # captures d'écran et GIF du README
 │   ├── DETECTION.md    # écrire et régler une règle de détection
 │   ├── INTEL.md        # brancher MISP / OTX / CERT et comprendre la corrélation
 │   ├── RBAC.md         # matrice des rôles et frontières entre organisations
@@ -278,6 +302,40 @@ Ces valeurs sont des **objectifs d'ingénierie**, pas des mesures : aucun exerci
 restauration n'a encore été exécuté sur une infrastructure cible (le tableau de
 suivi de `docs/PRA.md` est vide). Atteindre un RPO de quelques minutes demande une
 réplication en continu ou du PITR, hors du périmètre du démonstrateur.
+
+## Qualité et vérifications
+
+| Vérification | Où | Ce qui est garanti |
+|---|---|---|
+| Tests backend | `make test` | 346 tests, sur **SQLite et PostgreSQL** |
+| Couverture | `make coverage` | ≥ 80 % global, ≥ 90 % sur les modules critiques (`scope`, `security`, `worker`) |
+| Smoke E2E | `npm run e2e` (depuis `frontend/`) | connexion → cible → scan → export, contre la pile Compose |
+| Secrets | job CI `secrets` | gitleaks sur l'arbre **et** l'historique git |
+| Chart Helm | job CI `helm` | `lint --strict` + trois rendus |
+| Migrations | job CI `migrations` | upgrade → check → downgrade → upgrade, sur les deux moteurs |
+
+La suite tourne sur **deux moteurs** parce qu'un bug de production a vécu plusieurs
+semaines sans être vu : l'application écrivait des horodatages UTC *avec fuseau*
+dans des colonnes sans fuseau. SQLite l'accepte en silence, PostgreSQL le refuse.
+Un seul moteur de test ne prouve pas la portabilité d'un schéma.
+
+Gouvernance (protection de branche, commits signés, modèles d'issue et de PR) :
+[docs/GOVERNANCE.md](docs/GOVERNANCE.md).
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) — composants, flux, modèle de données
+- [Détection](docs/DETECTION.md) — écrire et régler une règle
+- [Renseignement](docs/INTEL.md) — MISP, OTX, flux CERT, corrélation
+- [RBAC](docs/RBAC.md) — rôles et isolation entre organisations
+- [SSO](docs/SSO.md) — flux OIDC et diagnostic
+- [Secrets](docs/SECRETS.md) — inventaire et rotation
+- [Supervision](docs/MONITORING.md) — métriques, tableau de bord, runbooks
+- [PRA](docs/PRA.md) — reprise d'activité, RPO/RTO
+- [Gouvernance](docs/GOVERNANCE.md) — protection de branche, contribution
+- [Doctrine](docs/DOCTRINE.md) — le volet stratégique
+- [Articles](docs/blog/) — un retour d'implémentation par version
+  ([v0.2 — nuclei, CVE et score](docs/blog/2026-09-v0.2-nuclei-cve-scoring.md))
 
 ## Licence
 

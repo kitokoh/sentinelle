@@ -1,0 +1,28 @@
+# Configuration de couverture (v0.7, issue #21).
+#
+# Le seuil global est de 80 %, et il est *aussi* vérifié par module critique dans
+# la CI : un chiffre global peut masquer un module à 20 % compensé par des
+# modèles triviaux à 100 %. Voir le job `backend` du workflow.
+
+[run]
+source = app
+branch = True
+omit =
+    */tests/*
+    */alembic/*
+    */scripts/*
+
+[report]
+# Lignes légitimement non couvertes : elles ne s'exécutent que dans des conditions
+# impossibles à provoquer en test (défense en profondeur, plateformes absentes).
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if TYPE_CHECKING:
+    \.\.\.
+fail_under = 80
+show_missing = True
+skip_covered = True
+
+[html]
+directory = htmlcov

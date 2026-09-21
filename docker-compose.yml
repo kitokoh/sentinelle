@@ -28,7 +28,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql+asyncpg://sentinelle:sentinelle@db:5432/sentinelle
+      # Même source que le service `db` : changer l'un sans l'autre casse la connexion.
+      DATABASE_URL: postgresql+asyncpg://sentinelle:${POSTGRES_PASSWORD:-sentinelle}@db:5432/sentinelle
       REDIS_URL: redis://redis:6379
       JWT_SECRET: change-me-in-production
       ENV: production
@@ -59,7 +60,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.worker   # image dédiée, contient nmap
     environment:
-      DATABASE_URL: postgresql+asyncpg://sentinelle:sentinelle@db:5432/sentinelle
+      # Même source que le service `db` : changer l'un sans l'autre casse la connexion.
+      DATABASE_URL: postgresql+asyncpg://sentinelle:${POSTGRES_PASSWORD:-sentinelle}@db:5432/sentinelle
       REDIS_URL: redis://redis:6379
       # Flux EVE partagé avec le capteur (#1). Absent du conteneur tant que le
       # profil `lab` n'est pas démarré : l'ingestion se contente de sauter le

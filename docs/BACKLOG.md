@@ -27,7 +27,7 @@ d'acceptation). Les éléments existants sont ignorés.
 | v0.4 — Threat Intel | MISP/OTX/CERT, corrélation IoC, carte | ✅ livré |
 | v0.5 — Rapports & gouvernance | PDF, RBAC, journal d'audit, SSO, multi-tenant | ✅ livré |
 | v0.6 — Production | Helm, secrets, chiffrement, monitoring, PRA | ✅ livré |
-| Qualité continue | Couverture 80 %, E2E, gouvernance dépôt, comm | 📋 5 issues |
+| Qualité continue | Couverture 80 %, E2E, gouvernance dépôt, comm | ✅ livré |
 
 ## Règles de triage
 
