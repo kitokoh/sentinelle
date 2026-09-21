@@ -13,14 +13,16 @@ sprinkled across routes:
   in ``app/api/*`` through ``app.api.deps``.
 """
 
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import alerts, audit, auth, dashboard, intel, oidc, scans, targets, users
+from app.api import alerts, audit, auth, dashboard, intel, monitoring, oidc, scans, targets, users
 from app.db import init_db
 from app.services import audit as audit_service
+from app.services import metrics as metrics_service
 
 
 @asynccontextmanager
@@ -33,7 +35,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Sentinelle API",
     description="Sovereign security-audit & cyber-defense demo platform (authorized targets only).",
-    version="0.5.0",
+    version="0.6.0",
     docs_url="/docs",
     lifespan=lifespan,
 )
@@ -45,6 +47,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def prometheus_metrics(request: Request, call_next):
+    """Time and count every request (#19).
+
+    The ``route`` label is the path *template* (``/api/scans/{scan_id}``), never
+    the raw path: using the raw path would create one time series per identifier
+    and make the metrics unusable.
+    """
+    started = time.perf_counter()
+    response = await call_next(request)
+    duration = time.perf_counter() - started
+
+    route = request.scope.get("route")
+    template = getattr(route, "path", None) or "unmatched"
+    # The scrape endpoint itself is not worth measuring.
+    if template != "/metrics":
+        metrics_service.observe_request(request.method, template, response.status_code, duration)
+    return response
 
 
 @app.middleware("http")
@@ -68,6 +90,8 @@ app.include_router(alerts.router, prefix="/api")
 app.include_router(intel.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
+# No prefix: Prometheus scrapes /metrics, not /api/metrics.
+app.include_router(monitoring.router)
 
 
 @app.get("/api/health", tags=["health"])

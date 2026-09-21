@@ -1,0 +1,33 @@
+{{/*
+ConfigMap des réglages NON sensibles, partagé par l'API et le worker.
+Il ne contient AUCUN secret : la clé JWT, le mot de passe PostgreSQL et les clés
+d'API restent dans le Secret référencé par `existingSecret`. Séparer les deux
+permet de lire la configuration en clair (`kubectl get cm`) sans exposer de
+valeur compromettante.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sentinelle.configMapName" . }}
+  labels:
+    {{- include "sentinelle.labels" . | nindent 4 }}
+data:
+  ENV: {{ .Values.config.env | quote }}
+  CERT_FEEDS: {{ .Values.config.certFeeds | quote }}
+  RETENTION_DAYS: {{ .Values.config.retentionDays | quote }}
+  OIDC_ISSUER: {{ .Values.config.oidcIssuer | quote }}
+  OIDC_CLIENT_ID: {{ .Values.config.oidcClientId | quote }}
+  OIDC_REDIRECT_URI: {{ .Values.config.oidcRedirectUri | quote }}
+  FRONTEND_URL: {{ .Values.config.frontendUrl | quote }}
+  MISP_URL: {{ .Values.config.mispUrl | quote }}
+  SURICATA_EVE_PATH: {{ .Values.config.suricataEvePath | quote }}
+  # Briques de connexion : le mot de passe reste dans le Secret, ces clés
+  # permettent de composer DATABASE_URL côté Pod (cf. sentinelle.commonEnv).
+  DATABASE_HOST: {{ .Values.postgresql.host | quote }}
+  DATABASE_PORT: {{ .Values.postgresql.port | quote }}
+  DATABASE_NAME: {{ .Values.postgresql.database | quote }}
+  DATABASE_USER: {{ .Values.postgresql.username | quote }}
+  # REDIS_HOST suit automatiquement le mode choisi : Service interne du Redis de
+  # démonstration, ou hôte externe (`redis.enabled=false`).
+  REDIS_HOST: {{ include "sentinelle.redisHost" . | quote }}
+  REDIS_PORT: {{ ternary (toString .Values.redis.service.port) (toString .Values.redis.external.port) .Values.redis.enabled | quote }}

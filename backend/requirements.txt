@@ -36,3 +36,6 @@ fpdf2==2.8.2
 
 # OIDC / Keycloak authorization-code flow (v0.5 — issue #14)
 authlib==1.4.0
+
+# Prometheus instrumentation (v0.6 — issue #19)
+prometheus-client==0.21.1

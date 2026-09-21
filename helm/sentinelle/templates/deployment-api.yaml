@@ -1,0 +1,112 @@
+{{/*
+Déploiement de l'API FastAPI.
+
+Deux points structurants :
+
+  * l'API applique `alembic upgrade head` à son démarrage (app/db.py -> init_db),
+    donc le worker — qui écrit dans le même schéma — ne doit démarrer qu'après
+    la fin du rollout de l'API (voir NOTES.txt) ;
+  * cette migration de démarrage justifie le `startupProbe` et la stratégie
+    `maxUnavailable: 0`, sans quoi une migration lente serait prise pour une
+    panne et provoquerait un CrashLoop.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sentinelle.componentName" (dict "root" . "component" "api") }}
+  labels:
+    {{- include "sentinelle.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.api.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: {{ .Values.api.strategy.maxUnavailable }}
+      maxSurge: {{ .Values.api.strategy.maxSurge }}
+  selector:
+    matchLabels:
+      {{- include "sentinelle.componentSelectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sentinelle.componentLabels" (dict "root" . "component" "api") | nindent 8 }}
+      annotations:
+        # Les variables non secrètes changent sans que l'image bouge : cette
+        # empreinte force un rollout, sinon un pod garderait l'ancien ConfigMap.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.api.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "sentinelle.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "sentinelle.podSecurityContext" (dict "root" . "component" "api") | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "sentinelle.image" (dict "repository" .Values.api.image.repository "tag" .Values.api.image.tag "appVersion" .Chart.AppVersion) | quote }}
+          imagePullPolicy: {{ include "sentinelle.imagePullPolicy" (dict "root" . "component" "api") }}
+          securityContext:
+            {{- include "sentinelle.containerSecurityContext" (dict "root" . "component" "api") | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            {{- include "sentinelle.commonEnv" (dict "root" .) | nindent 12 }}
+            {{- with .Values.api.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # Les migrations Alembic s'exécutent au premier boot : le startupProbe
+          # laisse jusqu'à failureThreshold x periodSeconds avant que le
+          # livenessProbe ne prenne le relais, ce qui évite de tuer un pod qui
+          # travaille encore.
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            failureThreshold: {{ .Values.api.probes.startup.failureThreshold }}
+            periodSeconds: {{ .Values.api.probes.startup.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: {{ .Values.api.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.probes.readiness.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: {{ .Values.api.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.probes.liveness.periodSeconds }}
+          resources:
+            {{- toYaml .Values.resources.api | nindent 12 }}
+          volumeMounts:
+            # readOnlyRootFilesystem=true : uvicorn et Python ont besoin d'un
+            # répertoire temporaire inscriptible, on le fournit explicitement
+            # plutôt que de rendre toute la racine modifiable.
+            - name: tmp
+              mountPath: /tmp
+          terminationGracePeriodSeconds: 30
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.api.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

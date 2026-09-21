@@ -1,0 +1,28 @@
+{{/*
+PodDisruptionBudgets — désactivés par défaut.
+
+Un PDB n'a de sens que sur une couche comptant plusieurs réplicas : avec
+`minAvailable: 1` sur un Deployment à 1 réplica, tout drain de nœud serait
+bloqué indéfiniment. On se limite donc à l'API et au frontend, et on laisse
+l'opérateur activer le garde-fou après avoir augmenté les réplicas.
+
+Le worker est volontairement exclu : couper un worker en cours de scan est
+récupérable (le job arq expire et repart), alors qu'en bloquer le drain
+retarderait une maintenance sans bénéfice pour l'utilisateur.
+*/}}
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- range $component := list "api" "web" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sentinelle.componentName" (dict "root" $ "component" $component) }}
+  labels:
+    {{- include "sentinelle.componentLabels" (dict "root" $ "component" $component) | nindent 4 }}
+spec:
+  minAvailable: {{ (index $.Values.podDisruptionBudget $component).minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "sentinelle.componentSelectorLabels" (dict "root" $ "component" $component) | nindent 6 }}
+{{- end }}
+{{- end }}

@@ -16,20 +16,25 @@ Two decisions worth defending:
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import or_
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models import Alert, Finding, Ioc
+from app.models import Alert, Finding, Ioc, Scan
 from app.services.intel.store import SEVERITY_ORDER
 
 logger = logging.getLogger(__name__)
 
 #: Matching on free text (detail/signature) is a LIKE scan — bound it.
 MAX_MATCHES_PER_IOC = 25
+#: Findings are matched **in Python**, not in SQL: ``findings.detail`` is
+#: encrypted at rest (#18), so a ``LIKE`` would compare against ciphertext and
+#: never match. The window below keeps that scan bounded.
+FINDING_LOOKBACK_DAYS = 90
+FINDING_CANDIDATE_LIMIT = 2000
 #: Hard ceiling on alerts created by a single correlation run.
 MAX_ALERTS_PER_RUN = 200
 #: The floor every intel match is raised to.
@@ -55,9 +60,36 @@ def _alert_filters(ioc: Ioc):
     return or_(Alert.detail.like(pattern), Alert.signature.like(pattern))
 
 
-def _finding_filter(ioc: Ioc):
-    """Findings only carry free text, whatever the indicator type."""
-    return Finding.detail.like(f"%{ioc.value}%")
+def _finding_matches(ioc: Ioc, finding: Finding) -> bool:
+    """Does this finding mention the indicator?
+
+    Done in Python because the text is encrypted at rest — see
+    :func:`_candidate_findings`. As a side effect the comparison is
+    case-insensitive on every backend, where a SQL ``LIKE`` was case-insensitive
+    on SQLite and case-sensitive on PostgreSQL.
+    """
+    haystack = (finding.detail or "").lower()
+    return bool(ioc.value) and ioc.value.lower() in haystack
+
+
+async def _candidate_findings(
+    session: AsyncSession,
+    since: datetime,
+    limit: int = FINDING_CANDIDATE_LIMIT,
+) -> list[Finding]:
+    """Load the findings a correlation run is allowed to inspect.
+
+    The bound is the point: an unbounded scan of a table whose searchable column
+    is encrypted would quietly become the most expensive query of the platform.
+    """
+    rows = await session.exec(
+        select(Finding)
+        .join(Scan, Finding.scan_id == Scan.id)
+        .where(Scan.created_at >= since)
+        .order_by(Scan.created_at.desc())
+        .limit(limit)
+    )
+    return list(rows.all())
 
 
 def _match_detail(ioc: Ioc, entity: str, description: str) -> str:
@@ -118,6 +150,11 @@ async def correlate_iocs(
         logger.info("intel correlation: no indicator stored yet")
         return counters
 
+    # Loaded once for the whole run rather than once per indicator: the scan is
+    # the expensive part, the matching is a substring test in memory.
+    findings_window_start = moment - timedelta(days=FINDING_LOOKBACK_DAYS)
+    candidate_findings = await _candidate_findings(session, findings_window_start)
+
     existing_keys: set[str] = set()
     for ioc in iocs:
         severity = _severity_for(ioc.severity)
@@ -133,13 +170,9 @@ async def correlate_iocs(
                 )
             ).all()
         )
-        matched_findings = list(
-            (
-                await session.exec(
-                    select(Finding).where(_finding_filter(ioc)).limit(MAX_MATCHES_PER_IOC)
-                )
-            ).all()
-        )
+        matched_findings = [
+            finding for finding in candidate_findings if _finding_matches(ioc, finding)
+        ][:MAX_MATCHES_PER_IOC]
 
         counters["alert_matches"] += len(matched_alerts)
         counters["finding_matches"] += len(matched_findings)

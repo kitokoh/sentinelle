@@ -89,6 +89,55 @@ jobs:
           alembic downgrade base
           alembic upgrade head
 
+  # Issue #17 : aucun secret committé. Le scan couvre l'arbre de travail ET
+  # l'historique git — un secret committé puis supprimé reste détecté, ce qui est
+  # précisément le cas qu'un scan de fichiers seuls laisserait passer.
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          curl -sSL -o gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Scan — arbre de travail
+        run: gitleaks detect --no-git --source . --config .gitleaks.toml --redact --exit-code 1 -v
+      - name: Scan — historique git
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --exit-code 1 -v
+
+  # Issue #16 : le chart doit se rendre. Un chart qui ne se rend pas est un chart
+  # que personne ne déploiera, et une erreur de template ne se voit qu'au rendu.
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+      - name: Lint
+        run: helm lint --strict helm/sentinelle
+      - name: Rendu — valeurs par défaut
+        run: helm template sentinelle helm/sentinelle > /dev/null
+      - name: Rendu — ingress + HPA, Redis externe
+        run: |
+          helm template sentinelle helm/sentinelle \
+            --set ingress.enabled=true \
+            --set autoscaling.enabled=true \
+            --set redis.enabled=false \
+            --set redis.external.host=redis.managed.local > /dev/null
+      - name: Rendu — Secret géré par le chart
+        run: |
+          helm template sentinelle helm/sentinelle \
+            --set existingSecret= \
+            --set postgresql.password=ci-password \
+            --set secret.jwtSecret=ci-jwt-secret \
+            --set redis.enabled=false > /dev/null
+
   frontend:
     runs-on: ubuntu-latest
     steps:

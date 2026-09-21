@@ -1,0 +1,20 @@
+# Charte Helm de la plateforme Sentinelle (issue #16).
+# apiVersion v2 = Helm 3 ; aucune dépendance de sous-charte n'est déclarée
+# volontairement : bitnami/redis n'est PAS vendu ici (cf. README.md).
+apiVersion: v2
+name: sentinelle
+description: >-
+  Charte Helm de la plateforme Sentinelle : API FastAPI, worker de scan
+  asynchrone (arq/nmap/nuclei), frontend React servi par nginx, Redis et base
+  de données PostgreSQL externe. Aucune base de données n'est déployée dans le
+  cluster, et le Redis embarqué n'est qu'une aide à la démonstration.
+type: application
+version: 0.6.0
+appVersion: "0.6.0"
+kubeVersion: ">=1.27.0-0"
+keywords:
+  - sentinelle
+  - security
+  - audit
+  - cyberdefense
+  - fastapi

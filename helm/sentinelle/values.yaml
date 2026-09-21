@@ -1,0 +1,412 @@
+# =============================================================================
+# Sentinelle — valeurs par défaut de la charte Helm (v0.6.0).
+#
+# Trois principes gouvernent ce fichier :
+#
+#  1. AUCUNE valeur sensible n'y figure. Le mot de passe PostgreSQL, la clé JWT,
+#     le secret OIDC et les clés d'API proviennent soit d'un Secret existant
+#     (`existingSecret`, recommandé en production), soit — en développement
+#     uniquement — des clés `secret.*` / `postgresql.password`, déclarées vides
+#     et rendues obligatoires par `required` dans templates/secret.yaml.
+#  2. Aucune base de données n'est déployée dans le cluster : PostgreSQL est une
+#     instance managée externe (Cloud SQL, RDS, Patroni d'équipe…).
+#  3. Le Redis embarqué (`redis.enabled=true`) n'est qu'une aide à la
+#     démonstration ; la production doit viser un Redis managé ou bitnami/redis.
+# =============================================================================
+
+# -- Surcharge du nom de la charte. Utile pour déployer plusieurs copies.
+nameOverride: ""
+# -- Surcharge complète du nom des ressources (défaut : <release>-sentinelle).
+fullnameOverride: ""
+
+# -- Nom du Secret Kubernetes portant les valeurs sensibles.
+#    Production : nom d'un Secret géré hors charte (Vault, External Secrets,
+#                 SealedSecret…) ou injecté par le pipeline de déploiement.
+#    Développement : mettre "" — la charte génère alors le Secret à partir de
+#                 `secret.*` et `postgresql.password`, qui deviennent obligatoires.
+#    La valeur par défaut pointe donc volontairement vers un Secret EXTERNE :
+#    un `helm install` par défaut ne peut pas créer de mot de passe.
+existingSecret: "sentinelle-secrets"
+
+# -- Valeurs sensibles utilisées UNIQUEMENT quand `existingSecret` est vide.
+#    Aucun défaut : `helm template` / `helm install` échoue si elles manquent,
+#    ce qui interdit de déployer par accident un secret de démonstration.
+secret:
+  # Signe les jetons JWT (app/core/config.py -> JWT_SECRET).
+  jwtSecret: ""
+  # Secret du client OIDC/Keycloak (#14). Vide => SSO désactivé, l'authentification
+  # locale (login/mot de passe) reste le seul chemin.
+  oidcClientSecret: ""
+  # Clé Fernet de chiffrement au repos (#18). Vide => dérivée de JWT_SECRET
+  # (toléré en développement, jamais en production).
+  fieldEncryptionKey: ""
+  # Jeton Bearer protégeant /metrics (#19). Vide => /metrics non protégé : la
+  # route ne doit alors pas être exposée hors du cluster.
+  metricsToken: ""
+  # Connecteur MISP (#6). Vide => la synchronisation MISP est simplement ignorée.
+  mispApiKey: ""
+  # Connecteur AlienVault OTX (#7). Vide => la synchronisation OTX est ignorée.
+  otxApiKey: ""
+
+# -- Réglages communs aux images de conteneurs.
+#    Les dépôts/tags vivent dans le bloc de chaque composant (api/worker/web/redis)
+#    pour qu'une montée de version puisse être faite composant par composant.
+image:
+  # -- Politique de récupération par défaut ; un composant peut la surcharger.
+  pullPolicy: IfNotPresent
+  # -- Secrets de registre privé, au format [{name: mon-registry-secret}].
+  pullSecrets: []
+
+# -- Compte de service utilisé par les trois workloads.
+serviceAccount:
+  # -- En créer un dédié plutôt que de réutiliser `default`.
+  create: true
+  # -- Nom explicite ; vide => <release>-sentinelle.
+  name: ""
+  # -- Annotations (ex. role-arn IRSA sur EKS, workload identity sur GKE).
+  annotations: {}
+  # -- Monter le jeton d'API dans le pod. Inutile ici : l'application ne parle
+  #    pas à l'API Kubernetes, donc on ne distribue pas ce jeton.
+  automount: false
+
+# -----------------------------------------------------------------------------
+# Configuration NON secrète, injectée dans l'API et le worker via un ConfigMap.
+# Les secrets ne passent jamais par ici (voir `existingSecret` / `secret.*`).
+# -----------------------------------------------------------------------------
+config:
+  # -- ENV=production active les garde-fous applicatifs (app/core/config.py).
+  env: production
+  # -- Flux d'avis CERT (#8), format "NOM=URL" séparés par des virgules.
+  certFeeds: "CERT-FR=https://www.cert.ssi.gouv.fr/feed/"
+  # -- Rétention des constats/alertes/événements en jours. 0 = purge désactivée.
+  retentionDays: 90
+  # -- SSO OIDC (#14). Les trois valeurs sont nécessaires pour activer le SSO ;
+  #    laisser `oidcIssuer` vide désactive proprement la fonctionnalité.
+  oidcIssuer: ""
+  oidcClientId: ""
+  oidcRedirectUri: ""
+  # -- URL publique de la SPA : cible de redirection après connexion SSO.
+  frontendUrl: "http://localhost:5173"
+  # -- Instance MISP (#6), non secrète. L'URL suffit à activer le connecteur,
+  #    encore faut-il la clé d'API correspondante (secret MISP_API_KEY).
+  mispUrl: ""
+  # -- Flux EVE JSON Suricata consommé par le worker (#1). Le fichier doit être
+  #    monté dans le pod (worker.extraVolumes / worker.extraVolumeMounts),
+  #    sinon l'ingestion saute simplement son cycle, sans erreur.
+  suricataEvePath: "/var/log/suricata/eve.json"
+
+# -----------------------------------------------------------------------------
+# PostgreSQL — instance EXTERNE, jamais déployée par cette charte.
+# -----------------------------------------------------------------------------
+postgresql:
+  # -- Hôte de l'instance managée. La valeur par défaut n'est qu'un repère de
+  #    validation : elle DOIT être remplacée avant tout déploiement réel
+  #    (NOTES.txt le rappelle à l'installation).
+  host: "postgresql"
+  port: 5432
+  database: sentinelle
+  username: sentinelle
+  # -- Mot de passe utilisé UNIQUEMENT quand `existingSecret` est vide.
+  #    Vide par défaut : jamais de mot de passe versionné.
+  password: ""
+  # -- Mode SSL ajouté à DATABASE_URL (ex. "require"). Un managed PostgreSQL
+  #    impose le TLS ; laisser vide seulement en réseau de confiance.
+  sslMode: "require"
+
+# -----------------------------------------------------------------------------
+# Redis — deux usages : broker arq (file de scans) et état des jobs.
+# -----------------------------------------------------------------------------
+redis:
+  # -- true : Redis minimal déployé dans le cluster (DÉMONSTRATION uniquement).
+  #    false : aucun Redis déployé, la charte pointe vers `redis.external.host`.
+  enabled: true
+  # -- Image de secours, volontairement minimale : ni réplication, ni
+  #    persistance, ni authentification, ni PodDisruptionBudget.
+  #    Pour un déploiement sérieux, voir README.md : soit ajouter bitnami/redis
+  #    comme dépendance, soit viser un Redis managé.
+  image:
+    repository: redis
+    tag: "7-alpine"
+    pullPolicy: ""
+  # -- Ressources du Redis de démonstration (cf. section `resources` plus bas).
+  service:
+    type: ClusterIP
+    port: 6379
+  # -- Connexion à un Redis EXTERNE (managé ou bitnami/redis déployé à part).
+  #    Utilisé dès que `redis.enabled=false`.
+  external:
+    host: ""
+    port: 6379
+    # -- La charte compose REDIS_URL sans authentification : un Redis externe
+    #    protégé par mot de passe doit fournir une URL complète, injectée via
+    #    `api.extraEnv` / `worker.extraEnv` (clé REDIS_URL, qui l'emporte sur la
+    #    valeur composée). Cette échappatoire évite de faire transiter un mot de
+    #    passe par values.yaml.
+
+# -----------------------------------------------------------------------------
+# Composants applicatifs.
+# -----------------------------------------------------------------------------
+api:
+  # -- 1 réplica par défaut : l'API applique `alembic upgrade head` à son
+  #    démarrage (app/db.py -> init_db). Deux réplicas qui démarrent en même
+  #    temps peuvent se disputer la même révision de migration. Pour passer à
+  #    plusieurs réplicas, sortir les migrations dans un Job (hook pre-upgrade)
+  #    ou dans un initContainer — voir README.md.
+  replicaCount: 1
+  image:
+    repository: ghcr.io/sentinelle/api
+    # -- Vide => tag = appVersion de la charte.
+    tag: ""
+    pullPolicy: ""
+  service:
+    type: ClusterIP
+    port: 8000
+    annotations: {}
+  # -- L'API expose /api/health (app/main.py), utilisé par les trois sondes.
+  #    Le startupProbe est indispensable : les migrations Alembic du démarrage
+  #    peuvent dépasser le délai du livenessProbe et provoquer un CrashLoop.
+  probes:
+    startup:
+      failureThreshold: 30
+      periodSeconds: 5
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    liveness:
+      initialDelaySeconds: 15
+      periodSeconds: 20
+  # -- Variables d'environnement supplémentaires (échappatoire documentée).
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # -- Liste blanche de maintenance : le rolling update ne descend jamais en
+  #    dessous du nombre de réplicas disponibles.
+  strategy:
+    maxUnavailable: 0
+    maxSurge: 1
+  # -- Surcharges du contexte de sécurité global (cf. `securityContext` plus bas).
+  securityContext: {}
+
+worker:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/sentinelle/worker
+    tag: ""
+    pullPolicy: ""
+  # -- Le worker n'expose AUCUN port : arq consomme une file Redis, il n'y a donc
+  #    ni Service ni sonde HTTP côté worker (voir templates/deployment-worker.yaml).
+  #    La sonde de vivacité est une sonde `exec` qui vérifie le processus arq.
+  probes:
+    liveness:
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 3
+  # -- Volume partagé du flux EVE Suricata (#1) : à renseigner pour que
+  #    l'ingestion fonctionne (PVC, hostPath, CSI…). Vide => l'ingestion saute.
+  extraVolumes: []
+  extraVolumeMounts: []
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # -- IMPORTANT — le worker fait partie des deux composants dont le contexte de
+  #    sécurité est volontairement DÉSACTIVÉ par rapport aux défauts durcis
+  #    (l'autre est le web, pour des raisons différentes) :
+  #      * runAsNonRoot: false  -> l'image officielle est construite en root et
+  #        met en cache les modèles nuclei sous /root/.config/nuclei ; la faire
+  #        tourner en uid non privilégié casserait nuclei, qui ne retrouverait
+  #        plus ses gabarits. Le corriger suppose de reconstruire l'image avec un
+  #        utilisateur dédié et HOME=/tmp : hors périmètre de la charte.
+  #      * readOnlyRootFilesystem: false -> nmap écrit ses temporaires et nuclei
+  #        met à jour ses gabarits dans le système de fichiers du conteneur ;
+  #      * drop: [ALL] + NET_RAW -> en root, nmap choisit le scan SYN (-sS), qui
+  #        exige d'ouvrir des sockets brutes. Retirer NET_RAW ferait échouer le
+  #        premier `-sV` en EPERM : c'est exactement la panne silencieuse qu'on
+  #        veut interdire. NET_RAW est la seule capacité conservée ; elle est
+  #        inhérente au métier du worker (comme NET_ADMIN/NET_RAW pour le
+  #        capteur Suricata du docker-compose). Pour s'en passer, il faut
+  #        modifier le code du scanner pour forcer `-sT` (scan connect, sans
+  #        privilèges) — décision qui n'appartient pas à la charte.
+  #
+  #    `runAsUser: 0` est INDISPENSABLE : `mergeOverwrite` ne sait pas supprimer
+  #    de clé, le pod hériterait sinon du runAsUser global (10001), alors que
+  #    runAsNonRoot=false ne fait que *autoriser* root — il ne l'impose pas.
+  #    Sans cette ligne, le worker tournerait en uid 10001, sans accès à
+  #    /root/.config/nuclei : le conteneur démarrerait puis échouerait au
+  #    premier scan. `fsGroup: 0` évite en outre que le kubelet ne change le
+  #    groupe du volume EVE partagé avec le capteur Suricata.
+  securityContext:
+    pod:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 0
+    container:
+      readOnlyRootFilesystem: false
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - NET_RAW
+
+web:
+  # -- Le frontend est sans état : deux réplicas dès le départ.
+  replicaCount: 2
+  image:
+    repository: ghcr.io/sentinelle/web
+    tag: ""
+    pullPolicy: ""
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+  probes:
+    startup:
+      failureThreshold: 12
+      periodSeconds: 5
+    readiness:
+      initialDelaySeconds: 3
+      periodSeconds: 10
+    liveness:
+      initialDelaySeconds: 10
+      periodSeconds: 20
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # -- IMPORTANT — nginx:alpine démarre en root puis abandonne ses droits au
+  #    profit de l'utilisateur `nginx` (setuid). Sans root ni capacités SETUID,
+  #    le master nginx ne peut pas faire cette bascule et le conteneur meurt.
+  #    On garde donc runAsNonRoot=false et un jeu de capacités minimal mais
+  #    suffisant pour écouter sur le port 80 privilégié.
+  #    Variante durcie : fournir un nginx.conf complet écoutant sur 8080 et
+  #    désactiver ce bloc (voir README.md).
+  #    `runAsUser: 0` / `runAsGroup: 0` sont INDISPENSABLES : `mergeOverwrite` ne
+  #    sait pas supprimer de clé, le pod hériterait sinon du runAsUser global
+  #    (10001) et nginx ne pourrait ni écrire /var/run/nginx.pid ni abandonner
+  #    ses droits — le conteneur mourrait au démarrage.
+  securityContext:
+    pod:
+      runAsNonRoot: false
+      runAsUser: 0
+      runAsGroup: 0
+    container:
+      readOnlyRootFilesystem: false
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - NET_BIND_SERVICE
+          - SETUID
+          - SETGID
+          - CHOWN
+          - DAC_OVERRIDE
+
+# -----------------------------------------------------------------------------
+# Ressources : requêtes et limites pour CHAQUE conteneur (bonnes pratiques QoS).
+# Les valeurs cibles visent un petit cluster ; le worker est calibré plus haut
+# car nmap/nuclei sont gourmands en CPU et en mémoire.
+# -----------------------------------------------------------------------------
+resources:
+  api:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  worker:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  web:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  redis:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+# -----------------------------------------------------------------------------
+# Contexte de sécurité par défaut, volontairement durci (PSS "restricted").
+# Chaque composant peut le surcharger — les exceptions sont commentées dans son
+# propre bloc (worker et web, cf. plus haut) et justifiées dans README.md.
+# -----------------------------------------------------------------------------
+securityContext:
+  pod:
+    # -- Aucun conteneur ne tourne en root ; uid/gid arbitraires et inutilisés.
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  container:
+    # -- Interdit l'élévation de privilèges (setuid, fichiers de capacités…).
+    allowPrivilegeEscalation: false
+    # -- Racine en lecture seule ; les écritures passent par des volumes vides.
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+# -----------------------------------------------------------------------------
+# Exposition.
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: sentinelle.local
+      paths:
+        # -- Tout passe par le frontend, qui proxifie lui-même /api vers le
+        #    Service de l'API : un seul point d'entrée, pas de CORS.
+        - path: /
+          pathType: Prefix
+          service: web
+  tls: []
+
+# -- Mise à l'échelle automatique (autoscaling/v2).
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  # -- Cible l'API (CPU).
+  api:
+    enabled: true
+  # -- Cible le frontend (CPU).
+  web:
+    enabled: true
+  # -- Le worker ne se mesure PAS au CPU : ce qui décrit sa charge est la
+  #    profondeur de la file arq dans Redis. Un HPA CPU produirait une mise à
+  #    l'échelle en retard sur les pics de scan ; préférer KEDA
+  #    (scaler Redis) — désactivé par défaut, et documenté dans README.md.
+  worker:
+    enabled: false
+
+# -- Budgets de perturbation : garantissent qu'un drain de nœud ne vide pas
+#    entièrement une couche. À n'activer que si replicaCount > minAvailable.
+podDisruptionBudget:
+  enabled: false
+  api:
+    minAvailable: 1
+  web:
+    minAvailable: 1

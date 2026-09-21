@@ -9,8 +9,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import get_settings
 from app.db import build_engine
-from app.models import Finding, IngestState, Scan, Target, utcnow
-from app.services import nvd, retention, scanner
+from app.models import Finding, IngestState, Scan, Target, WorkerHeartbeat, utcnow
+from app.services import metrics, nvd, retention, scanner
 from app.services.ingest import ingest_events
 from app.services.intel import correlation as intel_correlation
 from app.services.intel import feeds as intel_feeds
@@ -134,6 +134,17 @@ async def run_scan(ctx: dict, scan_id: int) -> str:
 # --------------------------------------------------------------------------- #
 
 
+async def _beat(session, name: str, detail: str | None = None) -> None:
+    """Refresh a worker's heartbeat row (v0.6, #19)."""
+    row = await session.get(WorkerHeartbeat, name)
+    if row is None:
+        row = WorkerHeartbeat(name=name)
+    row.last_seen_at = utcnow()
+    row.detail = detail
+    session.add(row)
+    await session.commit()
+
+
 def _ingest_state_key(eve_path: str) -> str:
     """Cursor identity: one offset per EVE file."""
     return f"suricata:eve:{eve_path}"
@@ -149,6 +160,11 @@ async def ingest_eve(ctx: dict | None = None, path: str | None = None) -> dict:
     key = _ingest_state_key(eve_path)
 
     async with _WorkerSession() as session:
+        # The heartbeat comes first, and unconditionally: a worker with no sensor
+        # attached is alive and must say so. Otherwise "no EVE file" and "worker
+        # dead" would look identical from the outside (#19).
+        await _beat(session, "arq-worker", detail=f"ingest:{eve_path}")
+
         state = await session.get(IngestState, key)
         result = read_new_lines(
             eve_path,

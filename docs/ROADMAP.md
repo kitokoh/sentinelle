@@ -37,16 +37,28 @@ interface.
 - [x] SSO / OIDC (Keycloak) — prérequis secteur public
 - [x] Multi-organisation (isolation stricte par requête)
 
-## v0.6 — Durcissement production
+## ✅ v0.6 — Durcissement production
 
-- [ ] Kubernetes (chart Helm), secrets externalisés (Vault)
-- [ ] Chiffrement au repos des constats sensibles
-- [ ] Tests de charge, plan de reprise, monitoring (Prometheus/Grafana)
+- [x] Kubernetes (chart Helm), secrets externalisés (SOPS/age ou Vault)
+- [x] Chiffrement au repos des constats sensibles
+- [x] Tests de charge, plan de reprise, monitoring (Prometheus/Grafana)
 
 ---
 
 ### Indicateurs de crédibilité (pour le dossier public)
 
-- Couverture de tests backend > 80 %
-- Démo rejouable en < 5 min (`docker compose up` + seed)
-- 1 article de blog technique par version (le volet « rayonner »)
+- [ ] Couverture de tests backend > 80 % *(v0.7)*
+- [x] Démo rejouable en < 5 min (`docker compose up` + seed)
+- [ ] 1 article de blog technique par version *(v0.7)*
+
+---
+
+## Après v0.6
+
+Les six versions prévues sont livrées. Les suites identifiées, par ordre de valeur :
+
+1. **Qualité continue** — couverture > 80 % avec barrière CI, E2E Playwright,
+   gouvernance du dépôt (commits signés, CODEOWNERS), captures de démonstration.
+2. **Multi-capteurs par organisation** — aujourd'hui `alerts.org_id IS NULL`
+   signifie « plateforme » ; un capteur par client lèverait cette limite.
+3. **Autoscaling sur la profondeur de file** (KEDA) plutôt que sur le CPU.
