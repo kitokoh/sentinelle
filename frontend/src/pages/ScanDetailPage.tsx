@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, Bug, Download, Loader2, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Bug, Download, FileText, Loader2, ShieldCheck } from 'lucide-react'
 import { api, getApiErrorMessage } from '../lib/api'
 import { formatDateTime, PROFILE_LABELS } from '../lib/format'
 import type { ScanDetail } from '../lib/types'
@@ -18,6 +18,7 @@ async function fetchScan(id: string): Promise<ScanDetail> {
 export default function ScanDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const [exporting, setExporting] = useState(false)
+  const [reporting, setReporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
 
   const { data, isPending, isError, error, refetch } = useQuery({
@@ -49,6 +50,27 @@ export default function ScanDetailPage() {
       setExportError('Export impossible — réessayez dans un instant.')
     } finally {
       setExporting(false)
+    }
+  }
+
+  /** Télécharge le rapport d'audit PDF (synthèse dirigeant + annexe technique). */
+  async function handleReport() {
+    setExportError(null)
+    setReporting(true)
+    try {
+      const response = await api.get(`/scans/${id}/report.pdf`, { responseType: 'blob' })
+      const url = URL.createObjectURL(response.data as Blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `rapport_scan_${id}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setExportError('Génération du rapport impossible — réessayez dans un instant.')
+    } finally {
+      setReporting(false)
     }
   }
 
@@ -129,19 +151,39 @@ export default function ScanDetailPage() {
                   Ports ouverts, services exposés et sévérité associée.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleExport}
-                disabled={exporting}
-                className="btn-ghost text-xs"
-              >
-                {exporting ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Download className="h-3.5 w-3.5" />
-                )}
-                Exporter CSV
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleReport}
+                  disabled={reporting || data.status !== 'done'}
+                  className="btn-primary text-xs"
+                  title={
+                    data.status === 'done'
+                      ? 'Rapport PDF : synthèse dirigeant + annexe technique'
+                      : 'Disponible à la fin du scan'
+                  }
+                >
+                  {reporting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5" />
+                  )}
+                  Rapport PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  disabled={exporting}
+                  className="btn-ghost text-xs"
+                >
+                  {exporting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  Exporter CSV
+                </button>
+              </div>
             </div>
 
             {exportError ? (

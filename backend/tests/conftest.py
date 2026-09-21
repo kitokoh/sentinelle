@@ -1,11 +1,16 @@
-"""Pytest fixtures. Points the app at a temporary SQLite DB before importing it."""
+"""Pytest fixtures. Points the app at a temporary database before importing it."""
 
 import os
 import tempfile
 
-# Must be set BEFORE app modules are imported (engine is built at import time).
+# Must be set BEFORE app modules are imported (the engine is built at import time).
+#
+# `setdefault`, not assignment: CI runs this same suite against PostgreSQL as
+# well as SQLite. The bug that made that necessary — aware datetimes written to
+# `timestamp without time zone` columns — was invisible for exactly one reason:
+# only SQLite ever ran these tests. See app/models/columns.py.
 _TMPDIR = tempfile.mkdtemp(prefix="sentinelle-test-")
-os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_TMPDIR}/test.db"
+os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_TMPDIR}/test.db")
 os.environ["JWT_SECRET"] = "test-secret-not-for-production"
 os.environ["ENV"] = "test"
 
@@ -20,6 +25,18 @@ def client():
     """TestClient against the app with tables created in a temp SQLite DB."""
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture(autouse=True)
+def _schema(client):
+    """Guarantee the schema exists for every test.
+
+    The migrations are applied by the API lifespan, which only runs once the
+    ``client`` fixture is instantiated. Tests that talk to the database directly
+    (without going through the API) would otherwise run against an empty file.
+    Depending on ``client`` here makes the whole suite order-independent.
+    """
+    return client
 
 
 @pytest.fixture(scope="session")

@@ -3,6 +3,7 @@ import {
   Crosshair,
   FileText,
   Globe2,
+  History,
   Landmark,
   LayoutDashboard,
   LogOut,
@@ -12,6 +13,9 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { useAlertStats } from '../lib/alerts'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '../lib/api'
+import type { Organization } from '../lib/types'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -23,6 +27,11 @@ const NAV_ITEMS = [
   { to: '/doctrine', label: 'Doctrine', icon: Landmark, end: false },
 ] as const
 
+/** Réservé aux administrateurs — l'API refuse de toute façon l'accès aux autres rôles. */
+const ADMIN_NAV_ITEMS = [
+  { to: '/journal', label: "Journal d'audit", icon: History, end: false },
+] as const
+
 function currentSection(pathname: string): string {
   if (pathname.startsWith('/cibles')) return 'Cibles'
   if (pathname.startsWith('/scans')) return 'Scans'
@@ -30,6 +39,7 @@ function currentSection(pathname: string): string {
   if (pathname.startsWith('/renseignement')) return 'Renseignement'
   if (pathname.startsWith('/rapports')) return 'Rapports'
   if (pathname.startsWith('/doctrine')) return 'Doctrine'
+  if (pathname.startsWith('/journal')) return "Journal d'audit"
   return 'Dashboard'
 }
 
@@ -40,6 +50,17 @@ export default function Layout() {
   // Compteur d'alertes non acquittées — rafraîchi par la même requête que la page.
   const { data: alertStats } = useAlertStats()
   const unacknowledged = alertStats?.unacknowledged ?? 0
+  const isAdmin = user?.role === 'admin'
+  // L'organisation n'est affichée que si elle est connue : pas de squelette inutile.
+  const { data: organization } = useQuery({
+    queryKey: ['organization'],
+    queryFn: async (): Promise<Organization> => {
+      const { data } = await api.get<Organization>('/users/organization')
+      return data
+    },
+    enabled: user !== null,
+    staleTime: 5 * 60_000,
+  })
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -58,7 +79,7 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 space-y-1 px-3 py-4">
-          {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+          {[...NAV_ITEMS, ...(isAdmin ? ADMIN_NAV_ITEMS : [])].map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -89,7 +110,9 @@ export default function Layout() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-400/70">
             Diffusion restreinte
           </p>
-          <p className="mt-1 text-xs text-slate-600">v0.4 · Environnement de démonstration</p>
+          <p className="mt-1 text-xs text-slate-600">
+            {organization ? organization.name : 'Sentinelle'} · v0.5
+          </p>
         </div>
       </aside>
 

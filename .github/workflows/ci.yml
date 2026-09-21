@@ -6,8 +6,32 @@ on:
   pull_request:
 
 jobs:
+  # The suite runs on BOTH engines on purpose. A latent bug — aware datetimes
+  # written to naive `DateTime()` columns — was invisible for months because only
+  # SQLite ever ran these tests, and SQLite silently drops the offset. PostgreSQL
+  # rejects it outright. One engine is not enough to know the schema is portable.
   backend:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sentinelle
+          POSTGRES_PASSWORD: sentinelle
+          POSTGRES_DB: sentinelle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sentinelle"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: ${{ matrix.database == 'postgres' && 'postgresql+asyncpg://sentinelle:sentinelle@localhost:5432/sentinelle' || 'sqlite+aiosqlite:///./ci-tests.db' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -15,7 +39,7 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
-      - name: Run tests
+      - name: Run tests (${{ matrix.database }})
         working-directory: backend
         run: pytest -q
 

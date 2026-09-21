@@ -4,10 +4,11 @@ import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import delete
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import get_settings
+from app.db import build_engine
 from app.models import Finding, IngestState, Scan, Target, utcnow
 from app.services import nvd, retention, scanner
 from app.services.ingest import ingest_events
@@ -23,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
-connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
-
-_engine = create_async_engine(settings.DATABASE_URL, echo=False, connect_args=connect_args)
+# Same engine factory as the API: tests drive the worker from their own loop, and
+# asyncpg will not share a pooled connection across loops.
+_engine = build_engine(settings.DATABASE_URL)
 _WorkerSession = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
 
 # v0.2 — at most this many distinct (service, version) pairs get NVD-enriched per scan.
@@ -78,7 +79,7 @@ async def run_scan(ctx: dict, scan_id: int) -> str:
 
             severities: list[str] = []
             for raw in raw_findings:
-                session.add(Finding(scan_id=scan.id, source="nmap", **raw))
+                session.add(Finding(scan_id=scan.id, source="nmap", org_id=scan.org_id, **raw))
                 severities.append(raw["severity"])
 
             # (a) nuclei — NON-fatal: a missing binary or failed run never
@@ -89,7 +90,7 @@ async def run_scan(ctx: dict, scan_id: int) -> str:
                 logger.info("nuclei skipped for scan %s: %s", scan.id, exc)
                 nuclei_findings = []
             for raw in nuclei_findings:
-                session.add(Finding(scan_id=scan.id, source="nuclei", **raw))
+                session.add(Finding(scan_id=scan.id, source="nuclei", org_id=scan.org_id, **raw))
                 severities.append(raw["severity"])
 
             # (b) NVD enrichment — best-effort; lookup_cves never raises.
@@ -100,6 +101,7 @@ async def run_scan(ctx: dict, scan_id: int) -> str:
                         Finding(
                             scan_id=scan.id,
                             source="nvd",
+                            org_id=scan.org_id,
                             port=0,
                             protocol="tcp",
                             service=cve["cve_id"],

@@ -1,9 +1,22 @@
 // Modèles de données alignés sur l'API Sentinelle.
 
+/** Rôles de la plateforme (v0.5). La hiérarchie est stricte : admin ⊃ analyste ⊃ lecteur. */
+export type Role = 'viewer' | 'analyst' | 'admin' | string
+
 export interface User {
   id: number
   email: string
-  role: string
+  role: Role
+  /** Organisation (tenant) de l'utilisateur. */
+  org_id: number
+  created_at?: string
+}
+
+export interface Organization {
+  id: number
+  name: string
+  slug: string
+  members: number
 }
 
 export type TargetKind = 'ip' | 'hostname' | 'cidr'
@@ -36,6 +49,8 @@ export type ScanStatus = 'pending' | 'running' | 'done' | 'failed' | 'denied' | 
 export interface Scan {
   id: number
   target_id: number
+  /** Organisation propriétaire du scan. */
+  org_id?: number
   profile: ScanProfile
   status: ScanStatus
   created_at: string
@@ -172,6 +187,25 @@ export interface GeoPoint {
   targeted_countries: string[]
 }
 
+/* ---------- v0.5 — Gouvernance ---------- */
+
+/** Une ligne du journal d'audit (`GET /api/audit`, administrateurs seulement). */
+export interface AuditLog {
+  id: number
+  created_at: string
+  actor_id: number | null
+  actor_email: string | null
+  org_id: number | null
+  action: string
+  method: string
+  path: string
+  status_code: number
+  entity: string | null
+  entity_id: number | null
+  ip: string | null
+  detail: string
+}
+
 export interface IntelOverview {
   counts: {
     iocs: number
@@ -188,10 +222,12 @@ export interface IntelOverview {
 }
 
 export interface DashboardStats {
-  targets: number
-  scans: number
-  findings: number
+  targets_count: number
+  scans_count: number
+  findings_count: number
   findings_by_severity: Record<string, number>
+  alerts_count: number
+  alerts_unacknowledged: number
   last_scans: Scan[]
 }
 

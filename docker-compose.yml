@@ -37,6 +37,13 @@ services:
       # MISP_API_KEY: …
       # OTX_API_KEY: …
       CERT_FEEDS: CERT-FR=https://www.cert.ssi.gouv.fr/feed/
+      # SSO / OIDC (#14) — sans les trois premières, l'authentification locale
+      # reste le seul chemin et le bouton SSO n'apparaît pas.
+      OIDC_ISSUER: ${OIDC_ISSUER:-http://localhost:8081/realms/sentinelle}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-sentinelle}
+      OIDC_CLIENT_SECRET: ${SENTINELLE_CLIENT_SECRET:-not-configured-change-me}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-http://localhost:8000/api/auth/oidc/callback}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     ports:
       - "8000:8000"
     depends_on:
@@ -89,6 +96,29 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+  # Fournisseur d'identité SSO (#14). Démarrer avec :
+  #   SENTINELLE_CLIENT_SECRET=… docker compose --profile sso up -d
+  # Le secret du client n'est PAS écrit dans le realm : il est injecté par
+  # variable d'environnement (``${env.SENTINELLE_CLIENT_SECRET}``), ce qui évite
+  # de versionner un secret — voir l'issue #17.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    profiles: ["sso"]
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-change-me-admin}
+      SENTINELLE_CLIENT_SECRET: ${SENTINELLE_CLIENT_SECRET:-not-configured-change-me}
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./deploy/keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.0\r\n\r\n' >&3 && cat <&3 | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   web:
     build: ./frontend                 # nginx sert le build + proxifie /api

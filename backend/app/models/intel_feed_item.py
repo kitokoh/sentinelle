@@ -10,6 +10,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
+from app.models.columns import utc_datetime_column
 
 
 def utcnow() -> datetime:
@@ -27,5 +28,5 @@ class IntelFeedItem(SQLModel, table=True):
     title: str = Field(default="")
     link: str = Field(default="")
     summary: str = Field(default="", sa_column=Column(Text))
-    published_at: datetime = Field(default_factory=utcnow, index=True)
-    fetched_at: datetime = Field(default_factory=utcnow)
+    published_at: datetime = Field(default_factory=utcnow, sa_column=utc_datetime_column(index=True))
+    fetched_at: datetime = Field(default_factory=utcnow, sa_column=utc_datetime_column())

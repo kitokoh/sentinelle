@@ -13,6 +13,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
+from app.models.columns import utc_datetime_column
 
 
 def utcnow() -> datetime:
@@ -26,8 +27,8 @@ class SensorEvent(SQLModel, table=True):
     #: Stable identity in the source stream — enforces idempotent ingestion.
     event_id: str = Field(index=True, unique=True)
     #: When the sensor observed it (Suricata ``timestamp``).
-    occurred_at: datetime = Field(index=True)
-    ingested_at: datetime = Field(default_factory=utcnow)
+    occurred_at: datetime = Field(sa_column=utc_datetime_column(index=True))
+    ingested_at: datetime = Field(default_factory=utcnow, sa_column=utc_datetime_column())
 
     #: alert | flow | dns | http | tls | ssh | fileinfo | …
     event_type: str = Field(default="", index=True)

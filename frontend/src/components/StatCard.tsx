@@ -1,11 +1,12 @@
 import type { LucideIcon } from 'lucide-react'
 
-type Tone = 'cyan' | 'emerald' | 'red' | 'slate'
+type Tone = 'cyan' | 'emerald' | 'red' | 'amber' | 'slate'
 
 const TONE_CLASSES: Record<Tone, string> = {
   cyan: 'border-cyan-400/20 text-cyan-400',
   emerald: 'border-emerald-400/20 text-emerald-400',
   red: 'border-red-400/20 text-red-400',
+  amber: 'border-amber-400/20 text-amber-400',
   slate: 'border-slate-700 text-slate-400',
 }
 

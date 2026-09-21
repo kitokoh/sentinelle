@@ -8,6 +8,7 @@ matters because Suricata truncates or rotates its log on restart.
 from datetime import datetime, timezone
 
 from sqlmodel import Field, SQLModel
+from app.models.columns import utc_datetime_column
 
 
 def utcnow() -> datetime:
@@ -23,4 +24,4 @@ class IngestState(SQLModel, table=True):
     offset: int = Field(default=0)
     #: Inode of the consumed file — a change means rotation, so the offset resets.
     inode: int = Field(default=0)
-    updated_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow, sa_column=utc_datetime_column())
