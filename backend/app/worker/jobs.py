@@ -4,10 +4,11 @@ import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import delete
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import get_settings
+from app.db import build_engine
 from app.models import Finding, IngestState, Scan, Target, utcnow
 from app.services import nvd, retention, scanner
 from app.services.ingest import ingest_events
@@ -23,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
-connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
-
-_engine = create_async_engine(settings.DATABASE_URL, echo=False, connect_args=connect_args)
+# Same engine factory as the API: tests drive the worker from their own loop, and
+# asyncpg will not share a pooled connection across loops.
+_engine = build_engine(settings.DATABASE_URL)
 _WorkerSession = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
 
 # v0.2 — at most this many distinct (service, version) pairs get NVD-enriched per scan.
