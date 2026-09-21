@@ -39,21 +39,33 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
+      # La mesure de couverture n'est faite qu'une fois : le seuil porte sur le
+      # code de l'application, pas sur le dialecte.
+      #
+      # Elle utilise une base DÉDIÉE. Le fichier SQLite de la matrice est un
+      # fichier, pas un conteneur jetable : le réutiliser d'un `pytest` à l'autre
+      # rejouait toute la suite sur des données déjà présentes (comptes en double,
+      # contraintes d'unicité), ce qui faisait échouer des dizaines de tests et
+      # faussait la mesure — un « échec de couverture » qui était en réalité un
+      # problème de propreté de base.
       - name: Run tests (${{ matrix.database }})
+        if: matrix.database == 'postgres'
         working-directory: backend
         run: pytest -q
-      # La barrière ne s'applique qu'au moteur SQLite : le seuil porte sur le code
-      # de l'application, pas sur le dialecte, et une seule mesure suffit.
-      - name: Coverage gate (${{ matrix.database }})
+
+      - name: Run tests with coverage gate (sqlite)
         if: matrix.database == 'sqlite'
         working-directory: backend
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./coverage.db
         run: |
           pytest -q --cov=app --cov-report=term-missing:skip-covered --cov-config=.coveragerc
-          # Les modules critiques sont vérifiés séparément : la moyenne globale
-          # peut rester au-dessus de 80 % alors qu'un module essentiel décroche.
-          pytest -q --cov=app.core.security --cov=app.services.scope --cov=app.worker \
-            --cov-report=term --cov-config=.coveragerc --cov-fail-under=90 --no-header \
-            > /dev/null
+          # Les modules critiques sont vérifiés sur les mêmes données de mesure :
+          # la moyenne globale peut rester au-dessus de 80 % alors qu'un module
+          # essentiel décroche.
+          coverage report \
+            --include="app/core/security.py,app/services/scope.py,app/worker/*" \
+            --fail-under=90
 
   # v0.3 (#4) — the migration series must be replayable on SQLite *and* PostgreSQL
   # before a schema change can ever reach a real deployment.
