@@ -39,9 +39,33 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
+      # La mesure de couverture n'est faite qu'une fois : le seuil porte sur le
+      # code de l'application, pas sur le dialecte.
+      #
+      # Elle utilise une base DÉDIÉE. Le fichier SQLite de la matrice est un
+      # fichier, pas un conteneur jetable : le réutiliser d'un `pytest` à l'autre
+      # rejouait toute la suite sur des données déjà présentes (comptes en double,
+      # contraintes d'unicité), ce qui faisait échouer des dizaines de tests et
+      # faussait la mesure — un « échec de couverture » qui était en réalité un
+      # problème de propreté de base.
       - name: Run tests (${{ matrix.database }})
+        if: matrix.database == 'postgres'
         working-directory: backend
         run: pytest -q
+
+      - name: Run tests with coverage gate (sqlite)
+        if: matrix.database == 'sqlite'
+        working-directory: backend
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./coverage.db
+        run: |
+          pytest -q --cov=app --cov-report=term-missing:skip-covered --cov-config=.coveragerc
+          # Les modules critiques sont vérifiés sur les mêmes données de mesure :
+          # la moyenne globale peut rester au-dessus de 80 % alors qu'un module
+          # essentiel décroche.
+          coverage report \
+            --include="app/core/security.py,app/services/scope.py,app/worker/*" \
+            --fail-under=90
 
   # v0.3 (#4) — the migration series must be replayable on SQLite *and* PostgreSQL
   # before a schema change can ever reach a real deployment.
@@ -137,6 +161,79 @@ jobs:
             --set postgresql.password=ci-password \
             --set secret.jwtSecret=ci-jwt-secret \
             --set redis.enabled=false > /dev/null
+
+  # Issue #22 : smoke E2E contre la pile Compose. Le scénario exerce la plomberie
+  # de bout en bout — nginx, proxy /api, API, base, export — ce qu'aucun test
+  # unitaire ne peut faire.
+  #
+  # Le worker n'est PAS démarré : son image télécharge les templates nuclei au
+  # build (plusieurs minutes) pour un résultat sans intérêt ici, puisque
+  # l'exécution d'un scan est déjà couverte par `backend/tests/test_worker.py` avec
+  # les scanners simulés. La CI vérifie donc qu'un scan est demandé et enregistré,
+  # pas qu'il s'exécute.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start the stack (db, redis, api, web)
+        run: docker compose up -d --build db redis api web
+
+      - name: Wait for the API
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -sf -m 2 http://localhost:8000/api/health > /dev/null; then
+              echo "API prête après ${attempt} tentative(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "L'API n'a jamais répondu" >&2
+          docker compose logs --tail=100 api
+          exit 1
+
+      - name: Seed demo data
+        run: docker compose exec -T api python seed_demo.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the smoke scenario
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:3000   # le service `web` (nginx)
+        run: npx playwright test e2e/smoke.spec.ts
+
+      # Un test rouge en CI qu'on ne peut pas relancer n'a de valeur que si on
+      # sait pourquoi il est rouge : trace, capture et journaux de la pile.
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          retention-days: 7
+
+      - name: Stack logs
+        if: failure()
+        run: docker compose logs --tail=200
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
 
   frontend:
     runs-on: ubuntu-latest

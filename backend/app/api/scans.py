@@ -24,7 +24,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.api.deps import analyst_required, get_current_org_id, get_current_user, viewer_required
 from app.core.config import get_settings
 from app.db import get_session
-from app.models import Finding, Scan, Target, User
+from app.models import Finding, Scan, Target, User, utcnow
 from app.services import metrics, reports
 
 router = APIRouter(prefix="/scans", tags=["scans"])
@@ -121,11 +121,34 @@ async def create_scan(
 
     metrics.record_scan(scan.profile)
 
-    redis = await arq.create_pool(RedisSettings.from_dsn(get_settings().REDIS_URL))
+    # The scan row exists by now, and it is kept: a scan that could not be queued
+    # is a fact an operator must be able to see, not a row that vanishes. It is
+    # marked failed with the reason, and the caller gets a 503 — "the queue is
+    # missing" is an infrastructure problem, not an internal server error, and
+    # saying so is the difference between a 10-second diagnosis and an hour of
+    # log reading.
     try:
-        await redis.enqueue_job("run_scan", scan.id)
-    finally:
-        await redis.close()
+        redis = await arq.create_pool(RedisSettings.from_dsn(get_settings().REDIS_URL))
+        try:
+            await redis.enqueue_job("run_scan", scan.id)
+        finally:
+            await redis.close()
+    except Exception as exc:  # noqa: BLE001 — any queue failure means "not queued"
+        scan.status = "failed"
+        scan.error = (
+            "The job queue was unreachable: the scan was created but never queued. "
+            "Start Redis and the worker, then launch it again."
+        )
+        scan.finished_at = utcnow()
+        session.add(scan)
+        await session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "The job queue is unreachable — the scan is recorded as failed. "
+                "Start Redis (and the worker) to run scans."
+            ),
+        ) from exc
 
     return scan
 

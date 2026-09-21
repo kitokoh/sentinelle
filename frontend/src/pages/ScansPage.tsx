@@ -184,11 +184,9 @@ export default function ScansPage() {
                     <td className="td font-mono text-xs text-slate-500">#{scan.id}</td>
                     <td className="td">
                       <p className="font-medium text-slate-200">
-                        {scan.target?.name ?? `Cible #${scan.target_id}`}
+                        {scan.target_name || `Cible #${scan.target_id}`}
                       </p>
-                      {scan.target ? (
-                        <p className="font-mono text-xs text-slate-500">{scan.target.value}</p>
-                      ) : null}
+                      <p className="font-mono text-xs text-slate-500">{scan.target_value}</p>
                     </td>
                     <td className="td">
                       <ProfileBadge profile={scan.profile} />

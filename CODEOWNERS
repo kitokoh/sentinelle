@@ -1,0 +1,20 @@
+# Codeowners — Sentinelle (v0.7, issue #23)
+#
+# Pourquoi un fichier à la racine et non dans .github/ : les deux emplacements
+# fonctionnent, la racine est celui que GitHub met en avant dans l'interface.
+#
+# Un dépôt avec un seul mainteneur n'a pas besoin de répartition fine. Ce fichier
+# sert à une chose précise : rendre explicite QUI doit être réveillé, pour ne pas
+# le découvrir au moment où une revue est nécessaire et qu'elle ne vient pas.
+
+# Tout le dépôt : le mainteneur.
+*                       @kitokoh
+
+# Les zones où une erreur coûte cher, listées pour la lisibilité de la règle
+# plutôt que pour changer de destinataire.
+/backend/app/services/scope.py      @kitokoh   # garde-fou de périmètre
+/backend/app/services/crypto.py     @kitokoh   # chiffrement au repos
+/backend/app/api/deps.py            @kitokoh   # autorisation et tenant
+/backend/alembic/                   @kitokoh   # migrations
+/.github/workflows/                 @kitokoh   # CI
+/deploy/                            @kitokoh   # secrets, sauvegardes

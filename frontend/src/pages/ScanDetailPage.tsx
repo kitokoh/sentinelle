@@ -104,11 +104,9 @@ export default function ScanDetailPage() {
               <div>
                 <dt className="label mb-1">Cible</dt>
                 <dd className="text-sm font-medium text-slate-200">
-                  {data.target?.name ?? `Cible #${data.target_id}`}
+                  {data.target_name || `Cible #${data.target_id}`}
                 </dd>
-                {data.target ? (
-                  <dd className="mt-0.5 font-mono text-xs text-slate-500">{data.target.value}</dd>
-                ) : null}
+                <dd className="mt-0.5 font-mono text-xs text-slate-500">{data.target_value}</dd>
               </div>
               <div>
                 <dt className="label mb-1">Profil</dt>

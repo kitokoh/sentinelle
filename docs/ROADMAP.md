@@ -47,9 +47,9 @@ interface.
 
 ### Indicateurs de crédibilité (pour le dossier public)
 
-- [ ] Couverture de tests backend > 80 % *(v0.7)*
-- [x] Démo rejouable en < 5 min (`docker compose up` + seed)
-- [ ] 1 article de blog technique par version *(v0.7)*
+- [x] Couverture de tests backend > 80 % (88 % mesurés, barrière à 80 % en CI)
+- [x] Démo rejouable en < 5 min (`docker compose up` + `make seed-demo`)
+- [x] 1 article de blog technique par version (v0.2 publiée, trame outillée)
 
 ---
 
@@ -57,8 +57,8 @@ interface.
 
 Les six versions prévues sont livrées. Les suites identifiées, par ordre de valeur :
 
-1. **Qualité continue** — couverture > 80 % avec barrière CI, E2E Playwright,
-   gouvernance du dépôt (commits signés, CODEOWNERS), captures de démonstration.
-2. **Multi-capteurs par organisation** — aujourd'hui `alerts.org_id IS NULL`
+1. **Multi-capteurs par organisation** — aujourd'hui `alerts.org_id IS NULL`
    signifie « plateforme » ; un capteur par client lèverait cette limite.
-3. **Autoscaling sur la profondeur de file** (KEDA) plutôt que sur le CPU.
+2. **Autoscaling sur la profondeur de file** (KEDA) plutôt que sur le CPU.
+3. **Commits signés** — la procédure est écrite (`docs/GOVERNANCE.md`), il reste à
+   générer les clés et à activer le mode vigilance.
