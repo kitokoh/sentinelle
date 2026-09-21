@@ -16,6 +16,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
+from app.models.columns import utc_datetime_column
 
 #: Lifecycle of an alert. Kept as plain strings so the column stays portable.
 ALERT_STATUSES = ("new", "ack")
@@ -29,7 +30,7 @@ class Alert(SQLModel, table=True):
     __tablename__ = "alerts"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: datetime = Field(default_factory=utcnow, index=True)
+    created_at: datetime = Field(default_factory=utcnow, sa_column=utc_datetime_column(index=True))
 
     #: suricata | rule | intel
     source: str = Field(default="suricata", index=True)
@@ -60,7 +61,7 @@ class Alert(SQLModel, table=True):
     payload: str = Field(default="", sa_column=Column(Text))
 
     status: str = Field(default="new", index=True)
-    acknowledged_at: Optional[datetime] = None
+    acknowledged_at: Optional[datetime] = Field(default=None, sa_column=utc_datetime_column(nullable=True))
     acknowledged_by: Optional[int] = Field(default=None, foreign_key="users.id")
 
     #: Tenant boundary (v0.5, #15). ``None`` means **platform-wide**: the sensor

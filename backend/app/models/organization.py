@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
+from app.models.columns import utc_datetime_column
 
 
 def utcnow() -> datetime:
@@ -30,4 +31,4 @@ class Organization(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     slug: str = Field(index=True, unique=True)
-    created_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_column=utc_datetime_column())

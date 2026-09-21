@@ -16,6 +16,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
+from app.models.columns import utc_datetime_column
 
 #: Indicator families we normalise every feed into.
 IOC_TYPES = ("ip", "domain", "url", "md5", "sha1", "sha256", "email")
@@ -38,11 +39,11 @@ class Ioc(SQLModel, table=True):
 
     severity: str = Field(default="medium", index=True)  # info | low | medium | high | critical
     #: When the source first/last reported the indicator.
-    first_seen: datetime = Field(default_factory=utcnow, index=True)
-    last_seen: datetime = Field(default_factory=utcnow, index=True)
+    first_seen: datetime = Field(default_factory=utcnow, sa_column=utc_datetime_column(index=True))
+    last_seen: datetime = Field(default_factory=utcnow, sa_column=utc_datetime_column(index=True))
 
     #: Feed-specific payload (pulse name, tags, TLP, country, lat/lon…).
     metadata_json: str = Field(default="{}", sa_column=Column(Text))
 
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(default_factory=utcnow, sa_column=utc_datetime_column())
+    updated_at: datetime = Field(default_factory=utcnow, sa_column=utc_datetime_column())

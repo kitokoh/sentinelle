@@ -131,12 +131,22 @@ def recommendations(findings: Sequence) -> list[str]:
 class _Report(FPDF):
     """Two-page report with a discreet footer on every page."""
 
-    def __init__(self, target_name: str, scan_id: int) -> None:
+    def __init__(self, target_name: str, scan_id: int, created_at: datetime) -> None:
         super().__init__(orientation="P", unit="mm", format="A4")
         self.target_name = target_name
         self.scan_id = scan_id
         self.set_auto_page_break(auto=True, margin=18)
         self.set_margins(16, 16, 16)
+
+        # Metadata. The creation date is pinned to the caller's clock rather than
+        # the wall clock, which makes the report **byte-for-byte reproducible**
+        # from the same inputs: an audit artefact that changes on its own would be
+        # worthless as evidence.
+        self.set_creation_date(created_at)
+        self.set_title(f"Rapport d'audit - {_safe(target_name)}")
+        self.set_author("Sentinelle")
+        self.set_subject(f"Scan #{scan_id} - diffusion restreinte")
+        self.set_creator("Sentinelle")
 
     def header(self) -> None:
         self.set_font("helvetica", "B", 8)
@@ -194,7 +204,7 @@ def build_scan_report(
     severities = [getattr(finding, "severity", "info") for finding in findings]
     counts = {severity: severities.count(severity) for severity in SEVERITY_ORDER}
 
-    pdf = _Report(target_name=target.name, scan_id=scan.id or 0)
+    pdf = _Report(target_name=target.name, scan_id=scan.id or 0, created_at=moment)
     pdf.add_page()
 
     # --- synthesis --------------------------------------------------------- #

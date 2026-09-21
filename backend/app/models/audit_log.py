@@ -20,6 +20,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
+from app.models.columns import utc_datetime_column
 
 
 def utcnow() -> datetime:
@@ -30,7 +31,7 @@ class AuditLog(SQLModel, table=True):
     __tablename__ = "audit_logs"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: datetime = Field(default_factory=utcnow, index=True)
+    created_at: datetime = Field(default_factory=utcnow, sa_column=utc_datetime_column(index=True))
 
     #: Resolved from the bearer token when the request carried one.
     actor_id: Optional[int] = Field(default=None, index=True)
