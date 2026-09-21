@@ -7,7 +7,8 @@ Create Date: 2026-09-21
 Migration for the v0.5 "Rapports & gouvernance" milestone (issues #13, #15):
 
   * ``organizations`` — the tenant boundary, with row ``id = 1`` created by this
-    revision as the **default organization**.
+    revision as the **default organization** (the sequence is realigned
+    afterwards on PostgreSQL, where an explicit id does not advance it).
   * ``org_id`` added to ``users``, ``targets``, ``scans``, ``findings`` and
     ``alerts``, existing rows backfilled into organization 1. Alerts are the one
     nullable case: ``NULL`` means *platform-wide* (the sensor feed and threat-intel
@@ -81,6 +82,17 @@ def upgrade() -> None:
             }
         ],
     )
+
+    # The row above carries an explicit id, and PostgreSQL's sequence for the
+    # column does NOT move when a value is supplied explicitly. Without the
+    # realignment below, the *next* organization created after a deployment would
+    # be assigned id = 1 again and fail with a duplicate key. SQLite needs
+    # nothing: it derives the next rowid from the current maximum.
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute(
+            "SELECT setval(pg_get_serial_sequence('organizations', 'id'), "
+            "(SELECT MAX(id) FROM organizations))"
+        )
 
     # --- 2. tenancy on users, plus the SSO link --------------------------- #
     with op.batch_alter_table("users") as batch:
