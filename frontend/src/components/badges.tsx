@@ -1,4 +1,4 @@
-import { ShieldAlert, ShieldCheck } from 'lucide-react'
+import { CheckCheck, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { KIND_LABELS } from '../lib/format'
 
 /* ---------- Statut de scan ---------- */
@@ -104,6 +104,65 @@ export function SourceBadge({ source }: { source: string }) {
       className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${classes}`}
     >
       {source}
+    </span>
+  )
+}
+
+/* ---------- Source d'une alerte (v0.3) ---------- */
+
+const ALERT_SOURCE_META: Record<string, { label: string; classes: string }> = {
+  suricata: { label: 'Suricata', classes: 'border-cyan-400/40 bg-cyan-400/5 text-cyan-400' },
+  rule: { label: 'Règle locale', classes: 'border-violet-400/40 bg-violet-400/10 text-violet-400' },
+  intel: { label: 'Renseignement', classes: 'border-orange-400/40 bg-orange-400/10 text-orange-400' },
+}
+
+export function AlertSourceBadge({ source }: { source: string }) {
+  const meta = ALERT_SOURCE_META[source] ?? {
+    label: source,
+    classes: 'border-slate-700 bg-slate-800 text-slate-400',
+  }
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${meta.classes}`}
+    >
+      {meta.label}
+    </span>
+  )
+}
+
+/* ---------- Cycle de vie d'une alerte ---------- */
+
+export function AlertStatusBadge({ status }: { status: string }) {
+  if (status === 'ack') {
+    return (
+      <span className="badge border-slate-700 bg-slate-800 text-slate-400">
+        <CheckCheck className="h-3.5 w-3.5" />
+        Acquittée
+      </span>
+    )
+  }
+  return (
+    <span className="badge border-amber-400/30 bg-amber-400/10 text-amber-400">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+      Nouvelle
+    </span>
+  )
+}
+
+/* ---------- Niveau de confiance d'une détection ---------- */
+
+export function ConfidenceBadge({ value }: { value: number | null }) {
+  if (value === null || value === undefined) {
+    return <span className="text-xs text-slate-600">—</span>
+  }
+  const percent = Math.round(Math.min(1, Math.max(0, value)) * 100)
+  const bar = percent >= 80 ? 'bg-red-400' : percent >= 50 ? 'bg-amber-400' : 'bg-cyan-400'
+  return (
+    <span className="inline-flex items-center gap-2" title={`Confiance ${percent} %`}>
+      <span className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-800">
+        <span className={`block h-full rounded-full ${bar}`} style={{ width: `${percent}%` }} />
+      </span>
+      <span className="tabular-nums text-xs text-slate-400">{percent} %</span>
     </span>
   )
 }

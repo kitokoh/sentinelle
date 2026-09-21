@@ -64,6 +64,57 @@ export interface ScanDetail extends Scan {
   findings: Finding[]
 }
 
+/* ---------- v0.3 — Alertes (défense) ---------- */
+
+/** Origine d'une alerte : signature du capteur, règle locale, ou renseignement (v0.4). */
+export type AlertSource = 'suricata' | 'rule' | 'intel' | string
+
+/** Cycle de vie d'une alerte : `new` tant qu'elle n'est pas acquittée. */
+export type AlertStatus = 'new' | 'ack' | string
+
+export interface Alert {
+  id: number
+  created_at: string
+  source: AlertSource
+  event_type: string
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info' | string
+  src_ip: string | null
+  src_port: number | null
+  dst_ip: string | null
+  dst_port: number | null
+  proto: string | null
+  /** Renseigné pour les alertes issues du moteur de règles. */
+  rule_name: string | null
+  /** 0–1 : marge au-dessus du seuil de détection. */
+  confidence: number | null
+  /** Nombre d'événements ayant alimenté l'alerte (déduplication). */
+  occurrences: number
+  signature: string | null
+  detail: string
+  status: AlertStatus
+  acknowledged_at: string | null
+  acknowledged_by: number | null
+}
+
+/** Alerte avec sa charge utile brute (événement EVE d'origine). */
+export interface AlertDetail extends Alert {
+  payload: string
+}
+
+export interface AlertStats {
+  total: number
+  unacknowledged: number
+  by_severity: Record<string, number>
+  by_source: Record<string, number>
+}
+
+export interface AlertFilters {
+  severity?: string[]
+  source?: string[]
+  status?: string[]
+  limit?: number
+}
+
 export interface DashboardStats {
   targets: number
   scans: number

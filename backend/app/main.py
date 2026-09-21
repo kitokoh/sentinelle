@@ -10,13 +10,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, dashboard, scans, targets
+from app.api import alerts, auth, dashboard, scans, targets
 from app.db import init_db
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables on startup (demo-grade; real deployments would use migrations).
+    # Bring the schema up to date by running the Alembic migrations (#4).
     await init_db()
     yield
 
@@ -41,6 +41,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(targets.router, prefix="/api")
 app.include_router(scans.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(alerts.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["health"])

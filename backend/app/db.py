@@ -3,7 +3,6 @@
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import get_settings
@@ -24,8 +23,14 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """Create all tables (imports models so they register on the metadata)."""
+    """Bring the schema up to date by running Alembic migrations.
+
+    Since v0.3 (#4) the schema is owned by Alembic rather than
+    ``metadata.create_all``, so an upgrade is replayable everywhere. The
+    migration series is executed on the very connection this engine owns.
+    """
     from app import models  # noqa: F401  (registers tables on SQLModel.metadata)
+    from app.migrations import upgrade_to_head
 
     async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
+        await conn.run_sync(upgrade_to_head)

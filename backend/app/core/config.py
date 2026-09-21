@@ -22,6 +22,18 @@ class Settings(BaseSettings):
     # v0.2 — optional NVD API key (raises rate limits; lookups work without it).
     NVD_API_KEY: Optional[str] = None
 
+    # --- v0.3 "Défense" (#1, #2, #5) -------------------------------------
+    #: Suricata EVE JSON stream tailed by the worker's ingest job.
+    SURICATA_EVE_PATH: str = "/var/log/suricata/eve.json"
+    #: Declarative detection rules. Empty -> the packaged rules/detection.yaml.
+    DETECTION_RULES_PATH: Optional[str] = None
+    #: Days of findings / alerts / sensor events kept before the purge job runs.
+    #: <= 0 disables purging entirely (retention for ever — e.g. a lab demo).
+    RETENTION_DAYS: int = 90
+    #: How many sensor events the ingest job pulls back from the DB to evaluate
+    #: detection rules over (a safety cap on the sliding window query).
+    DETECTION_WINDOW_MAX_EVENTS: int = 5000
+
 
 @lru_cache
 def get_settings() -> Settings:

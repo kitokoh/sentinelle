@@ -7,13 +7,16 @@ import {
   LogOut,
   Radar,
   Shield,
+  Siren,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
+import { useAlertStats } from '../lib/alerts'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/cibles', label: 'Cibles', icon: Crosshair, end: false },
   { to: '/scans', label: 'Scans', icon: Radar, end: false },
+  { to: '/alertes', label: 'Alertes', icon: Siren, end: false },
   { to: '/rapports', label: 'Rapports', icon: FileText, end: false },
   { to: '/doctrine', label: 'Doctrine', icon: Landmark, end: false },
 ] as const
@@ -21,6 +24,7 @@ const NAV_ITEMS = [
 function currentSection(pathname: string): string {
   if (pathname.startsWith('/cibles')) return 'Cibles'
   if (pathname.startsWith('/scans')) return 'Scans'
+  if (pathname.startsWith('/alertes')) return 'Alertes'
   if (pathname.startsWith('/rapports')) return 'Rapports'
   if (pathname.startsWith('/doctrine')) return 'Doctrine'
   return 'Dashboard'
@@ -30,6 +34,9 @@ export default function Layout() {
   const { user, logout } = useAuth()
   const location = useLocation()
   const initial = (user?.email ?? '·').charAt(0).toUpperCase()
+  // Compteur d'alertes non acquittées — rafraîchi par la même requête que la page.
+  const { data: alertStats } = useAlertStats()
+  const unacknowledged = alertStats?.unacknowledged ?? 0
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -63,6 +70,14 @@ export default function Layout() {
             >
               <Icon className="h-4 w-4" />
               {label}
+              {to === '/alertes' && unacknowledged > 0 ? (
+                <span
+                  className="ml-auto rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-400"
+                  title={`${unacknowledged} alerte(s) non acquittée(s)`}
+                >
+                  {unacknowledged}
+                </span>
+              ) : null}
             </NavLink>
           ))}
         </nav>
@@ -71,7 +86,7 @@ export default function Layout() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-400/70">
             Diffusion restreinte
           </p>
-          <p className="mt-1 text-xs text-slate-600">v0.4.0 · Environnement de démonstration</p>
+          <p className="mt-1 text-xs text-slate-600">v0.3 · Environnement de démonstration</p>
         </div>
       </aside>
 

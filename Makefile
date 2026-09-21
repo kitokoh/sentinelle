@@ -1,4 +1,4 @@
-.PHONY: up down logs seed test dev-api dev-web dev-worker
+.PHONY: up down logs seed test migrate migration sensor rules dev-api dev-web dev-worker
 
 up:            ## Build et lance toute la stack
 	docker compose up -d --build
@@ -14,6 +14,20 @@ seed:          ## Crée le compte démo + cible lab
 
 test:          ## Tests backend
 	cd backend && pytest -q
+
+migrate:       ## Applique les migrations Alembic (base locale)
+	cd backend && alembic upgrade head
+
+migration:     ## Nouvelle révision : make migration m="ajout de la table x"
+	cd backend && alembic revision --autogenerate -m "$(m)"
+
+sensor:        ## Démarre le capteur Suricata du lab (profil `lab`)
+	docker compose --profile lab up -d sensor
+
+rules:         ## Vérifie que le fichier de règles de détection est valide
+	cd backend && python -c "from app.services.detection import load_rules; \
+	rules = load_rules(); print(f'{len(rules)} règle(s) chargée(s) :'); \
+	[print(' -', r.name, f'({r.kind}, seuil {r.threshold}/{r.window_seconds}s)') for r in rules]"
 
 dev-api:       ## API en local (SQLite)
 	cd backend && uvicorn app.main:app --reload

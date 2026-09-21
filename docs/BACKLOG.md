@@ -23,7 +23,7 @@ d'acceptation). Les éléments existants sont ignorés.
 |---|---|---|
 | v0.1 — Socle | Auth JWT, cibles + garde-fou, scans nmap async, dashboard | ✅ livré |
 | v0.2 — Audit vulnérabilités | nuclei, CVE (NVD), score de risque, export CSV | ✅ livré |
-| v0.3 — Défense | Suricata, règles de détection, alertes, Alembic | 📋 5 issues |
+| v0.3 — Défense | Suricata, règles de détection, alertes, Alembic | ✅ livré |
 | v0.4 — Threat Intel | MISP/OTX/CERT, corrélation IoC, carte | 📋 5 issues |
 | v0.5 — Rapports & gouvernance | PDF, RBAC, journal d'audit, SSO, multi-tenant | 📋 5 issues |
 | v0.6 — Production | Helm, secrets, chiffrement, monitoring, PRA | 📋 5 issues |

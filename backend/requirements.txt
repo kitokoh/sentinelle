@@ -24,3 +24,9 @@ redis==4.6.0
 # Tests
 pytest==8.3.4
 pytest-asyncio==0.24.0
+
+# Schema migrations (v0.3 — issue #4)
+alembic==1.14.0
+
+# Declarative detection rules (v0.3 — issue #2)
+PyYAML==6.0.2
