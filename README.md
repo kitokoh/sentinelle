@@ -59,6 +59,22 @@ dans le secteur public : technique **et** doctrine.
 - 🌍 **Page Renseignement** : veille CERT, indicateurs filtrables, correspondances
   et **carte des campagnes** (coordonnées fournies par les flux uniquement)
 
+### v0.5 — Rapports & gouvernance
+
+- 📄 **Rapports PDF** : synthèse dirigeant (score, points saillants,
+  recommandations justifiables) + annexe technique exhaustive, générés sans
+  dépendance native
+- 🔐 **RBAC fin** (lecteur / analyste / administrateur) appliqué par dépendance
+  FastAPI sur toutes les routes, **fail closed** — matrice dans
+  [docs/RBAC.md](docs/RBAC.md)
+- 🧾 **Journal d'audit** : une ligne par requête modifiante, écrite par
+  middleware, en lecture seule, filtrable — sans jamais stocker de corps de requête
+- 🏢 **Multi-organisation** : isolation stricte par requête (404 et non 403),
+  couverte par des tests négatifs
+- 🪪 **SSO / OIDC** (Keycloak, profil `sso`) : code d'autorisation + mapping des
+  rôles de realm, l'authentification locale restant disponible
+  ([docs/SSO.md](docs/SSO.md))
+
 ## Stack
 
 | Couche | Choix | Pourquoi |
@@ -119,20 +135,26 @@ La CI rejoue la série complète (upgrade → check → downgrade → upgrade) s
 
 ```
 sentinelle/
-├── backend/            # API FastAPI + worker arq + tests (182 tests)
-│   ├── alembic/        # migrations (0001 initial, 0002 défense, 0003 renseignement)
+├── backend/            # API FastAPI + worker arq + tests (248 tests)
+│   ├── alembic/        # migrations (initial, défense, renseignement, gouvernance)
 │   ├── rules/          # règles de détection déclaratives (YAML)
 │   └── app/
-│       ├── api/        # routes (auth, targets, scans, dashboard, alerts, intel)
-│       ├── services/   # scope, scanner, detection, ingest, retention, intel/
+│       ├── api/        # routes (auth, oidc, targets, scans, dashboard,
+│       │               #   alerts, intel, users, audit)
+│       ├── core/       # config, sécurité, rôles
+│       ├── services/   # scope, scanner, detection, ingest, retention,
+│       │               #   intel/, audit, oidc, reports
 │       └── worker/     # jobs arq : run_scan, ingest_eve, purge, sync_*, correlate
 ├── frontend/           # SPA React/TS (dashboard, cibles, scans, alertes,
-│                       #   renseignement, rapports, doctrine)
+│                       #   renseignement, rapports, journal, doctrine)
+├── deploy/keycloak/    # realm SSO de démonstration (#14)
 ├── docs/
 │   ├── ARCHITECTURE.md # composants, flux, modèle de données
 │   ├── DETECTION.md    # écrire et régler une règle de détection
 │   ├── INTEL.md        # brancher MISP / OTX / CERT et comprendre la corrélation
-│   ├── ROADMAP.md      # v0.1 → v0.6 (rapports PDF, RBAC, production)
+│   ├── RBAC.md         # matrice des rôles et frontières entre organisations
+│   ├── SSO.md          # brancher Keycloak, comprendre le flux OIDC
+│   ├── ROADMAP.md      # v0.1 → v0.6 (secrets, monitoring, production)
 │   └── DOCTRINE.md     # le volet stratégique : doctrine cyber nationale
 ├── .github/workflows/  # CI : tests backend, migrations (SQLite + PostgreSQL), build front
 └── docker-compose.yml  # db + redis + api + worker + web (+ capteur en profil `lab`)
@@ -164,10 +186,32 @@ CERT_FEEDS=CERT-FR=https://www.cert.ssi.gouv.fr/feed/
 Puis, sur la page **Renseignement**, le bouton « Synchroniser » déclenche un
 cycle complet à la demande. Détails et diagnostic : [docs/INTEL.md](docs/INTEL.md).
 
+## Rôles, organisations et journal d'audit
+
+Trois rôles hiérarchiques : **lecteur** (lecture seule), **analyste** (cibles,
+scans, acquittements) et **administrateur** (utilisateurs, journal). La matrice
+complète est dans [docs/RBAC.md](docs/RBAC.md).
+
+Chaque donnée appartient à une **organisation** ; toute lecture filtre dessus, et
+une ressource d'un autre tenant répond 404 — jamais 403, qui confirmerait son
+existence.
+
+Le **journal d'audit** est écrit automatiquement par un middleware à chaque
+requête modifiante (acteur, action, ressource, statut, IP). Il est en lecture
+seule et ne conserve **aucun corps de requête** : mots de passe et jetons n'y
+apparaissent jamais.
+
+```bash
+# SSO (profil `sso`) — le secret du client est injecté, jamais versionné
+SENTINELLE_CLIENT_SECRET=un-secret-solide docker compose --profile sso up -d
+```
+
+Détails du flux OIDC et diagnostic : [docs/SSO.md](docs/SSO.md).
+
 ## Roadmap
 
-Voir [docs/ROADMAP.md](docs/ROADMAP.md) — prochaine étape : **v0.5** (rapports
-PDF, RBAC fin, journal d'audit, SSO/OIDC, multi-organisation).
+Voir [docs/ROADMAP.md](docs/ROADMAP.md) — prochaine étape : **v0.6** (chart Helm,
+secrets externalisés, chiffrement au repos, monitoring Prometheus/Grafana, PRA).
 
 ## Licence
 

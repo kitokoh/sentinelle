@@ -78,7 +78,7 @@ async def run_scan(ctx: dict, scan_id: int) -> str:
 
             severities: list[str] = []
             for raw in raw_findings:
-                session.add(Finding(scan_id=scan.id, source="nmap", **raw))
+                session.add(Finding(scan_id=scan.id, source="nmap", org_id=scan.org_id, **raw))
                 severities.append(raw["severity"])
 
             # (a) nuclei — NON-fatal: a missing binary or failed run never
@@ -89,7 +89,7 @@ async def run_scan(ctx: dict, scan_id: int) -> str:
                 logger.info("nuclei skipped for scan %s: %s", scan.id, exc)
                 nuclei_findings = []
             for raw in nuclei_findings:
-                session.add(Finding(scan_id=scan.id, source="nuclei", **raw))
+                session.add(Finding(scan_id=scan.id, source="nuclei", org_id=scan.org_id, **raw))
                 severities.append(raw["severity"])
 
             # (b) NVD enrichment — best-effort; lookup_cves never raises.
@@ -100,6 +100,7 @@ async def run_scan(ctx: dict, scan_id: int) -> str:
                         Finding(
                             scan_id=scan.id,
                             source="nvd",
+                            org_id=scan.org_id,
                             port=0,
                             protocol="tcp",
                             service=cve["cve_id"],

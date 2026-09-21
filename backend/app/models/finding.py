@@ -11,12 +11,16 @@ from typing import Optional
 from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
 
+from app.models.user import DEFAULT_ORG_ID
+
 
 class Finding(SQLModel, table=True):
     __tablename__ = "findings"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     scan_id: int = Field(foreign_key="scans.id", index=True)
+    #: Tenant boundary (v0.5, #15) — inherited from the scan.
+    org_id: int = Field(default=DEFAULT_ORG_ID, foreign_key="organizations.id", index=True)
     port: int
     protocol: str = Field(default="tcp")
     service: str = Field(default="")

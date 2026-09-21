@@ -11,6 +11,7 @@ from app.api.deps import get_current_user
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db import get_session
 from app.models import User
+from app.models.user import DEFAULT_ORG_ID
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -29,6 +30,8 @@ class UserRead(BaseModel):
     id: int
     email: str
     role: str
+    #: Tenant the account belongs to (v0.5, #15).
+    org_id: int
     created_at: datetime
 
 
@@ -44,7 +47,14 @@ async def register(payload: AuthPayload, session: AsyncSession = Depends(get_ses
     if not payload.password:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Password must not be empty")
 
-    user = User(email=payload.email, hashed_password=hash_password(payload.password))
+    # New self-service accounts join the default organization (#15). Being
+    # invited into another tenant is an administrative action, not a self-service one.
+    user = User(
+        email=payload.email,
+        hashed_password=hash_password(payload.password),
+        role="analyst",
+        org_id=DEFAULT_ORG_ID,
+    )
     session.add(user)
     await session.commit()
     await session.refresh(user)

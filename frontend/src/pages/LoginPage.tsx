@@ -1,8 +1,26 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Loader2, Lock, Mail, Shield } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { AlertTriangle, KeyRound, Loader2, Lock, Mail, Shield } from 'lucide-react'
+import { api, getApiErrorMessage } from '../lib/api'
 import { useAuth } from '../auth/AuthContext'
-import { getApiErrorMessage } from '../lib/api'
+
+interface OidcConfig {
+  enabled: boolean
+  provider: string | null
+  login_url: string | null
+}
+
+/** Message d'erreur éventuellement renvoyé par le fournisseur d'identité. */
+function ssoErrorFromUrl(): string | null {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  const code = params.get('sso_error')
+  if (!code) return null
+  if (code === 'invalid_state') return "Session SSO expirée ou invalide — réessayez."
+  if (code === 'exchange_failed') return "Le fournisseur d'identité a refusé la connexion."
+  if (code === 'access_denied') return 'Connexion annulée auprès du fournisseur.'
+  return `Échec de la connexion SSO (${code}).`
+}
 
 type Mode = 'login' | 'register'
 
@@ -13,8 +31,18 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(ssoErrorFromUrl)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Le bouton SSO n'apparaît que si l'instance est configurée côté API.
+  const { data: oidc } = useQuery({
+    queryKey: ['oidc', 'config'],
+    queryFn: async (): Promise<OidcConfig> => {
+      const { data } = await api.get<OidcConfig>('/auth/oidc/config')
+      return data
+    },
+    staleTime: 5 * 60_000,
+  })
 
   // Déjà authentifié : retour direct au poste de commandement.
   if (token) {
@@ -137,11 +165,28 @@ export default function LoginPage() {
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {mode === 'login' ? 'Se connecter' : "Créer le compte"}
             </button>
+
+            {oidc?.enabled && oidc.login_url ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <span className="h-px flex-1 bg-slate-800" />
+                  <span className="text-[10px] uppercase tracking-wider text-slate-600">ou</span>
+                  <span className="h-px flex-1 bg-slate-800" />
+                </div>
+                <a href={oidc.login_url} className="btn-ghost w-full justify-center">
+                  <KeyRound className="h-4 w-4" />
+                  Se connecter avec {oidc.provider ?? 'le SSO'}
+                </a>
+                <p className="helper">
+                  Authentification déléguée au fournisseur d'identité de votre organisation.
+                </p>
+              </>
+            ) : null}
           </form>
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-600">
-          Accès réservé au personnel autorisé — Sentinelle v0.4 · diffusion restreinte
+          Accès réservé au personnel autorisé — Sentinelle v0.5 · diffusion restreinte
         </p>
       </div>
     </div>

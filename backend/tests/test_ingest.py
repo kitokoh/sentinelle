@@ -19,11 +19,6 @@ from app.services.ingest import ingest_events
 from app.services.suricata import normalize_events
 
 
-@pytest.fixture(autouse=True)
-def _schema(client):
-    """The migrations run during the API lifespan; direct-DB tests need them too."""
-    return client
-
 
 def flow_record(now: datetime, seconds_ago: float, **overrides) -> dict:
     """A Suricata ``flow`` record, timestamped relative to ``now``."""

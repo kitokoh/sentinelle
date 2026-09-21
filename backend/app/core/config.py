@@ -49,6 +49,24 @@ class Settings(BaseSettings):
     #: Bound on the indicators considered by one correlation run (#9).
     INTEL_IOC_LIMIT: int = 1000
 
+    # --- v0.5 "Rapports & gouvernance" (#12–#15) --------------------------
+    #: OIDC / Keycloak single sign-on (#14). All three of the first settings are
+    #: required to enable SSO; the rest fall back to sensible defaults.
+    OIDC_ISSUER: Optional[str] = None
+    OIDC_CLIENT_ID: Optional[str] = None
+    OIDC_CLIENT_SECRET: Optional[str] = None
+    OIDC_REDIRECT_URI: str = "http://localhost:8000/api/auth/oidc/callback"
+    OIDC_SCOPES: str = "openid profile email"
+    #: Claim holding the provider's roles (Keycloak: ``realm_access.roles``).
+    OIDC_ROLE_CLAIM: str = "realm_access.roles"
+    #: Provider roles mapped onto each platform role. Highest privilege wins.
+    OIDC_ADMIN_ROLES: str = "sentinelle-admin,admin"
+    OIDC_ANALYST_ROLES: str = "sentinelle-analyst,analyst"
+    #: Role granted to an identity with no recognisable role (least privilege).
+    OIDC_DEFAULT_ROLE: str = "viewer"
+    #: Where the browser is sent back after login (the SPA).
+    FRONTEND_URL: str = "http://localhost:5173"
+
 
 @lru_cache
 def get_settings() -> Settings:

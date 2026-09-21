@@ -30,11 +30,12 @@ interface.
 - [x] Corrélation IOC ↔ constats locaux
 - [x] Carte des campagnes ciblant le pays (page dédiée)
 
-## v0.5 — Rapports & gouvernance
+## ✅ v0.5 — Rapports & gouvernance
 
-- [ ] **Rapports PDF** générés (synthèse dirigeant + annexe technique)
-- [ ] RBAC fin (admin / analyste / lecteur), journal d'audit complet
-- [ ] SSO / OIDC (Keycloak) — prérequis secteur public
+- [x] **Rapports PDF** générés (synthèse dirigeant + annexe technique)
+- [x] RBAC fin (admin / analyste / lecteur), journal d'audit complet
+- [x] SSO / OIDC (Keycloak) — prérequis secteur public
+- [x] Multi-organisation (isolation stricte par requête)
 
 ## v0.6 — Durcissement production
 

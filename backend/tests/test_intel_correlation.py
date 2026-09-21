@@ -23,10 +23,6 @@ from app.services.intel.normalize import candidate
 NOW = datetime(2026, 9, 21, 12, 0, 0, tzinfo=timezone.utc)
 
 
-@pytest.fixture(autouse=True)
-def _schema(client):
-    return client
-
 
 async def _seed_ioc(ioc_type: str, value: str, source: str = "misp", severity: str = "medium") -> int:
     item = candidate(ioc_type, value, source, severity=severity, metadata={"name": "synthetic"})

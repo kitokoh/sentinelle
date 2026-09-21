@@ -18,10 +18,6 @@ from app.worker import jobs
 NOW = datetime.now(timezone.utc)
 
 
-@pytest.fixture(autouse=True)
-def _schema(client):
-    return client
-
 
 async def _seed_ioc(
     ioc_type: str,

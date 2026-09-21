@@ -62,3 +62,9 @@ class Alert(SQLModel, table=True):
     status: str = Field(default="new", index=True)
     acknowledged_at: Optional[datetime] = None
     acknowledged_by: Optional[int] = Field(default=None, foreign_key="users.id")
+
+    #: Tenant boundary (v0.5, #15). ``None`` means **platform-wide**: the sensor
+    #: feed and threat-intel matches belong to the platform, not to one customer,
+    #: so every organization sees them. A non-null value is a hard boundary —
+    #: an alert scoped to an organization is invisible to any other.
+    org_id: Optional[int] = Field(default=None, foreign_key="organizations.id", index=True)

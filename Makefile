@@ -1,4 +1,4 @@
-.PHONY: up down logs seed test migrate migration sensor rules dev-api dev-web dev-worker
+.PHONY: up down logs seed test migrate migration sensor sso rules dev-api dev-web dev-worker
 
 up:            ## Build et lance toute la stack
 	docker compose up -d --build
@@ -23,6 +23,9 @@ migration:     ## Nouvelle révision : make migration m="ajout de la table x"
 
 sensor:        ## Démarre le capteur Suricata du lab (profil `lab`)
 	docker compose --profile lab up -d sensor
+
+sso:           ## Démarre Keycloak (profil `sso`) — nécessite SENTINELLE_CLIENT_SECRET
+	docker compose --profile sso up -d keycloak
 
 rules:         ## Vérifie que le fichier de règles de détection est valide
 	cd backend && python -c "from app.services.detection import load_rules; \

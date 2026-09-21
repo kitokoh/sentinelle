@@ -18,11 +18,6 @@ from app.services.intel.normalize import candidate
 NOW = datetime(2026, 9, 21, 12, 0, 0, tzinfo=timezone.utc)
 
 
-@pytest.fixture(autouse=True)
-def _schema(client):
-    """The migrations run during the API lifespan; direct-DB tests need them too."""
-    return client
-
 
 def ip_candidate(value: str, source: str, **overrides) -> dict:
     """Deterministic candidate: never relies on the wall clock."""

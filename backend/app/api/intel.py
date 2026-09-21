@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import analyst_required, get_current_user, viewer_required
 from app.core.config import get_settings
 from app.db import get_session
 from app.models import Alert, IntelFeedItem, Ioc, User
@@ -39,7 +39,7 @@ class SyncRequest(BaseModel):
 @router.get("/overview")
 async def get_overview(
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(viewer_required),
 ) -> dict:
     """Everything the Renseignement page needs, in one round trip."""
     return await intel_overview.build_overview(session)
@@ -48,7 +48,7 @@ async def get_overview(
 @router.get("/iocs")
 async def list_iocs(
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(viewer_required),
     type: Optional[str] = Query(None, description="ip | domain | url | md5 | sha1 | sha256 | email"),
     source: Optional[str] = Query(None, description="misp | otx"),
     severity: Optional[str] = Query(None, description="Repeatable or comma-separated."),
@@ -79,7 +79,7 @@ async def list_iocs(
 @router.get("/feed")
 async def list_feed(
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(viewer_required),
     source: Optional[str] = Query(None, description="Feed name, e.g. CERT-FR."),
     limit: int = Query(50, ge=1, le=MAX_LIMIT),
     offset: int = Query(0, ge=0),
@@ -99,7 +99,7 @@ async def list_feed(
 @router.get("/matches")
 async def list_matches(
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(viewer_required),
     status_filter: Optional[str] = Query(None, alias="status", description="new | ack"),
     limit: int = Query(50, ge=1, le=MAX_LIMIT),
     offset: int = Query(0, ge=0),
@@ -117,7 +117,7 @@ async def list_matches(
 @router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_sync(
     payload: SyncRequest | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(analyst_required),
 ) -> dict:
     """Enqueue a full intel cycle (connectors + correlation) on the worker.
 

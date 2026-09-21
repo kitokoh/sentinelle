@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, Bug, ChevronRight, Crosshair, Radar } from 'lucide-react'
+import { AlertTriangle, Bug, ChevronRight, Crosshair, Radar, Siren } from 'lucide-react'
 import {
   Bar,
   BarChart,
@@ -74,24 +74,24 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* Cartes de synthèse */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <StatCard
               label="Cibles"
-              value={formatNumber(data.targets)}
+              value={formatNumber(data.targets_count)}
               icon={Crosshair}
               tone="cyan"
               hint="Actifs déclarés au registre"
             />
             <StatCard
               label="Scans"
-              value={formatNumber(data.scans)}
+              value={formatNumber(data.scans_count)}
               icon={Radar}
               tone="cyan"
               hint="Campagnes exécutées"
             />
             <StatCard
               label="Constats"
-              value={formatNumber(data.findings)}
+              value={formatNumber(data.findings_count)}
               icon={Bug}
               tone="emerald"
               hint="Toutes sévérités confondues"
@@ -102,6 +102,13 @@ export default function DashboardPage() {
               icon={AlertTriangle}
               tone="red"
               hint="À traiter en priorité"
+            />
+            <StatCard
+              label="Alertes à traiter"
+              value={formatNumber(data.alerts_unacknowledged ?? 0)}
+              icon={Siren}
+              tone="amber"
+              hint="Détections non acquittées"
             />
           </div>
 

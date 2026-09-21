@@ -5,9 +5,7 @@ from typing import Optional
 
 from sqlmodel import Field, SQLModel
 
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+from app.models.user import DEFAULT_ORG_ID, utcnow
 
 
 class Target(SQLModel, table=True):
@@ -20,6 +18,8 @@ class Target(SQLModel, table=True):
     scope_status: str = Field(default="denied")  # allowed | denied
     authorization_reference: Optional[str] = None
     owner_id: int = Field(foreign_key="users.id", index=True)
+    #: Tenant boundary (v0.5, #15) — every read path filters on it.
+    org_id: int = Field(default=DEFAULT_ORG_ID, foreign_key="organizations.id", index=True)
     created_at: datetime = Field(default_factory=utcnow)
     # v0.2 — risk score of the latest completed scan against this target.
     risk_score: float = Field(default=0.0)

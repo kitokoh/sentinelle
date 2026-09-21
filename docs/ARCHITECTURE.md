@@ -67,11 +67,17 @@ valeur (ip|cidr|hostname)
 - **IngestState** (v0.3) curseur `key, offset, inode` — rend le tail idempotent
 - **Ioc** (v0.4) `id, type(ip|domain|url|md5|sha1|sha256|email), value, sources, severity, first_seen, last_seen, metadata_json` — **unique sur `(type, value)`**
 - **IntelFeedItem** (v0.4) `id, guid(unique), source, title, link, summary, published_at`
+- **Organization** (v0.5) `id, name, slug` — la frontière de tenant ; la ligne `id = 1` est créée par la migration
+- **AuditLog** (v0.5) `id, created_at, actor_id, actor_email, org_id, action, method, path, status_code, entity, entity_id, ip, user_agent, detail`
+
+Depuis la v0.5, `users`, `targets`, `scans` et `findings` portent un `org_id`
+non nul ; `alerts.org_id` est **nullable** et `NULL` signifie *plateforme* (flux
+du capteur et renseignement), visible par toutes les organisations.
 
 Le schéma est versionné par **Alembic** (`backend/alembic/versions/`) :
-`0001_initial` reproduit le schéma v0.2, `0002_defense` ajoute les trois tables
-de la défense, `0003_intel` celles du renseignement. `alembic check` est exécuté
-en CI — toute dérive entre modèles et migrations échoue la construction.
+`0001_initial` reproduit le schéma v0.2, `0002_defense` ajoute les tables de la
+défense, `0003_intel` celles du renseignement, `0004_governance` les organisations, les colonnes de tenant et le journal d'audit. `alembic check` est
+exécuté en CI — toute dérive entre modèles et migrations échoue la construction.
 
 ## Flux défensif (v0.3)
 
@@ -128,6 +134,26 @@ Deux choix structurent ce flux :
 
 Détails de configuration et de réglage : [INTEL.md](INTEL.md).
 
+## Préoccupations transverses (v0.5)
+
+Trois mécanismes ne vivent dans aucune route : ils s'appliquent à toutes.
+
+```
+requête ─┬─▶ dépendance de rôle        (deps.py)      → 401 / 403
+         ├─▶ filtre de tenant         (chaque requête) → 404
+         └─▶ middleware d'audit       (main.py)        → 1 ligne si mutation
+```
+
+| Mécanisme | Où | Propriété garantie |
+|---|---|---|
+| RBAC | `api/deps.py`, `core/roles.py` | Refus **fail closed** : un rôle inconnu vaut lecteur |
+| Isolation | `org_id` sur les tables + filtres | Une ressource d'un autre tenant répond 404, jamais 403 |
+| Audit | `services/audit.py` + middleware | Aucune route ne peut oublier de journaliser ; aucun corps de requête n'est stocké |
+
+Le journal d'audit est **append-only** : aucune route d'écriture n'existe, et la
+purge de rétention ne le touche pas. Une action est le seul moyen d'y ajouter une
+ligne.
+
 ## Flux d'un scan
 
 1. `POST /api/scans {target_id, profile}` — 403 si cible `denied`
@@ -151,8 +177,11 @@ Détails de configuration et de réglage : [INTEL.md](INTEL.md).
   santé — voir le monitoring en v0.6).
 - Scan d'une cible publique nécessite un Redis joignable, sinon 500 après
   création du scan `pending` (à durcir : file persistante + reprise)
-- Mono-tenant. Multi-organisation + RBAC fin en v0.5.
-- Les alertes sont globales (pas encore cloisonnées par organisation) : la vue
-  SOC est unique, ce qui est le comportement attendu en v0.3.
+- Mono-tenant à l'échelle du client : une organisation = un capteur. Un capteur
+  par client relèvera de la v0.6.
+- Les alertes plateforme (`org_id IS NULL`) sont visibles par toutes les
+  organisations — c'est voulu pour le flux du capteur et du renseignement.
 - La carte des campagnes n'affiche que les coordonnées fournies par les flux :
   aucun indicateur n'est envoyé à un service de géolocalisation tiers.
+- Le rapport PDF est mis en page à la main (fpdf2) plutôt que par WeasyPrint ou
+  typst : aucune bibliothèque native à installer ni à maintenir dans l'image.

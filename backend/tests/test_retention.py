@@ -18,11 +18,6 @@ from app.models import Alert, Finding, Scan, SensorEvent, Target
 from app.services.retention import purge_expired
 
 
-@pytest.fixture(autouse=True)
-def _schema(client):
-    """The migrations run during the API lifespan; direct-DB tests need them too."""
-    return client
-
 NOW = datetime(2026, 9, 21, 12, 0, 0, tzinfo=timezone.utc)
 
 

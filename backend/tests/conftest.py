@@ -22,6 +22,18 @@ def client():
         yield test_client
 
 
+@pytest.fixture(autouse=True)
+def _schema(client):
+    """Guarantee the schema exists for every test.
+
+    The migrations are applied by the API lifespan, which only runs once the
+    ``client`` fixture is instantiated. Tests that talk to the database directly
+    (without going through the API) would otherwise run against an empty file.
+    Depending on ``client`` here makes the whole suite order-independent.
+    """
+    return client
+
+
 @pytest.fixture(scope="session")
 def auth_headers(client):
     """Register a throwaway user and return Authorization headers for it."""

@@ -30,3 +30,9 @@ alembic==1.14.0
 
 # Declarative detection rules (v0.3 — issue #2)
 PyYAML==6.0.2
+
+# PDF audit reports (v0.5 — issue #11). Pure Python: no pango/cairo in the image.
+fpdf2==2.8.2
+
+# OIDC / Keycloak authorization-code flow (v0.5 — issue #14)
+authlib==1.4.0

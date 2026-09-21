@@ -12,11 +12,16 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import (
+    analyst_required,
+    get_current_org_id,
+    get_current_user,
+    viewer_required,
+)
 from app.db import get_session
 from app.models import Alert, User, utcnow
 
@@ -25,6 +30,16 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 SEVERITIES = ("info", "low", "medium", "high", "critical")
 #: Hard cap so a SOC export never turns into an accidental full-table dump.
 MAX_LIMIT = 500
+
+
+def _visible_to(org_id: int):
+    """Alerts of this organization, plus the platform-wide feed (``org_id IS NULL``).
+
+    The sensor stream and threat-intel matches belong to the platform rather than
+    to one customer; anything explicitly scoped to an organization is a hard
+    boundary and never leaks (see docs/RBAC.md).
+    """
+    return or_(Alert.org_id == org_id, Alert.org_id.is_(None))
 
 
 class AlertRead(BaseModel):
@@ -75,26 +90,43 @@ def _split_values(values: Optional[list[str]]) -> list[str]:
     return flattened
 
 
+async def _get_visible_alert(alert_id: int, session: AsyncSession, org_id: int) -> Alert:
+    """Load an alert the caller may see, or raise 404 (never confirm another tenant's id)."""
+    alert = await session.get(Alert, alert_id)
+    if alert is None or (alert.org_id is not None and alert.org_id != org_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    return alert
+
+
 @router.get("/stats", response_model=AlertStats)
 async def alert_stats(
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(viewer_required),
+    org_id: int = Depends(get_current_org_id),
 ) -> AlertStats:
     """Counters driving the sidebar badge and the dashboard cards."""
-    total = (await session.exec(select(func.count()).select_from(Alert))).one()
+    visible = _visible_to(org_id)
+    total = (
+        await session.exec(select(func.count()).select_from(Alert).where(visible))
+    ).one()
     unacknowledged = (
         await session.exec(
-            select(func.count()).select_from(Alert).where(Alert.status == "new")
+            select(func.count())
+            .select_from(Alert)
+            .where(visible)
+            .where(Alert.status == "new")
         )
     ).one()
 
     severity_rows = (
-        await session.exec(select(Alert.severity, func.count()).group_by(Alert.severity))
+        await session.exec(select(Alert.severity, func.count()).where(visible).group_by(Alert.severity))
     ).all()
     by_severity = {severity: 0 for severity in SEVERITIES}
     by_severity.update({severity: count for severity, count in severity_rows})
 
-    source_rows = (await session.exec(select(Alert.source, func.count()).group_by(Alert.source))).all()
+    source_rows = (
+        await session.exec(select(Alert.source, func.count()).where(visible).group_by(Alert.source))
+    ).all()
     by_source = {source: count for source, count in source_rows}
 
     return AlertStats(
@@ -108,7 +140,8 @@ async def alert_stats(
 @router.get("", response_model=list[AlertRead])
 async def list_alerts(
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(viewer_required),
+    org_id: int = Depends(get_current_org_id),
     severity: Optional[list[str]] = Query(None, description="Repeatable or comma-separated."),
     source: Optional[list[str]] = Query(None, description="suricata | rule | intel"),
     status_filter: Optional[list[str]] = Query(None, alias="status", description="new | ack"),
@@ -121,7 +154,7 @@ async def list_alerts(
     offset: int = Query(0, ge=0),
 ) -> list[Alert]:
     """List alerts newest first, with the filters the SOC page exposes."""
-    query = select(Alert)
+    query = select(Alert).where(_visible_to(org_id))
 
     severities = _split_values(severity)
     if severities:
@@ -154,12 +187,11 @@ async def list_alerts(
 async def get_alert(
     alert_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(viewer_required),
+    org_id: int = Depends(get_current_org_id),
 ) -> Alert:
     """Fetch one alert including its raw payload."""
-    alert = await session.get(Alert, alert_id)
-    if alert is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    alert = await _get_visible_alert(alert_id, session, org_id)
     return alert
 
 
@@ -168,16 +200,15 @@ async def update_alert(
     alert_id: int,
     payload: AlertUpdate,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(analyst_required),
+    org_id: int = Depends(get_current_org_id),
 ) -> Alert:
     """Acknowledge an alert (or reopen it).
 
     Acknowledgement is recorded with the acting user and a timestamp — the
     first line of the audit trail formalised in v0.5 (#13).
     """
-    alert = await session.get(Alert, alert_id)
-    if alert is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    alert = await _get_visible_alert(alert_id, session, org_id)
 
     alert.status = payload.status
     if payload.status == "ack":

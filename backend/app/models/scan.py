@@ -5,9 +5,7 @@ from typing import Optional
 
 from sqlmodel import Field, SQLModel
 
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+from app.models.user import DEFAULT_ORG_ID, utcnow
 
 
 class Scan(SQLModel, table=True):
@@ -15,6 +13,8 @@ class Scan(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     target_id: int = Field(foreign_key="targets.id", index=True)
+    #: Tenant boundary (v0.5, #15) — copied from the target at creation time.
+    org_id: int = Field(default=DEFAULT_ORG_ID, foreign_key="organizations.id", index=True)
     profile: str = Field(default="quick")  # quick | full
     status: str = Field(default="pending")  # pending | running | done | failed | denied
     created_at: datetime = Field(default_factory=utcnow)

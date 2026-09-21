@@ -1,0 +1,78 @@
+{
+  "realm": "sentinelle",
+  "displayName": "Sentinelle",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "roles": {
+    "realm": [
+      {
+        "name": "sentinelle-admin",
+        "description": "Administrateur Sentinelle : tout, y compris les utilisateurs et le journal d'audit"
+      },
+      {
+        "name": "sentinelle-analyst",
+        "description": "Analyste Sentinelle : cibles, scans, acquittement des alertes"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "sentinelle",
+      "name": "Sentinelle API",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "secret": "${env.SENTINELLE_CLIENT_SECRET}",
+      "redirectUris": ["http://localhost:8000/api/auth/oidc/callback"],
+      "webOrigins": ["http://localhost:5173"],
+      "defaultClientScopes": ["openid", "profile", "email", "roles", "web-origins"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "analyste.demo",
+      "email": "analyste.demo@sentinelle.local",
+      "firstName": "Analyste",
+      "lastName": "Démo",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Demo2026!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["sentinelle-analyst"]
+    },
+    {
+      "username": "admin.demo",
+      "email": "admin.demo@sentinelle.local",
+      "firstName": "Administrateur",
+      "lastName": "Démo",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Demo2026!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["sentinelle-admin"]
+    }
+  ]
+}
