@@ -49,7 +49,10 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column("slug", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
+        # timezone=True from the start: this row is inserted *below*, and
+        # PostgreSQL/asyncpg refuses an aware datetime for a naive column. The
+        # bulk conversion happens in 0005, which is too late for this insert.
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_organizations_slug", "organizations", ["slug"], unique=True)
@@ -68,8 +71,9 @@ def upgrade() -> None:
                 "id": DEFAULT_ORG_ID,
                 "name": "Organisation par défaut",
                 "slug": "default",
-                # A real datetime, not SQL now(): the SQLite dialect refuses
-                # anything that is not a Python date/datetime object.
+                # A real aware UTC datetime, not SQL now(): SQLite refuses
+                # anything that is not a Python date/datetime object, and the
+                # column is timestamptz so PostgreSQL accepts the offset.
                 "created_at": datetime.now(timezone.utc),
             }
         ],

@@ -58,8 +58,9 @@ UTC_COLUMNS: tuple[tuple[str, str, bool], ...] = (
     ("iocs", "updated_at", False),
     ("intel_feed_items", "published_at", False),
     ("intel_feed_items", "fetched_at", False),
-    ("organizations", "created_at", False),
     ("audit_logs", "created_at", False),
+    # ``organizations.created_at`` is absent on purpose: 0004 creates it as
+    # timestamptz directly, because it inserts a row into it in the same revision.
 )
 
 
