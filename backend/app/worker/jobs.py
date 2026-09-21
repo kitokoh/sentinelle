@@ -8,9 +8,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import get_settings
-from app.models import Finding, Scan, Target
-from app.services import nvd, scanner
+from app.models import Finding, IngestState, Scan, Target, utcnow
+from app.services import nvd, retention, scanner
+from app.services.ingest import ingest_events
 from app.services.risk import compute_risk_score
+from app.services.suricata import normalize_events, read_new_lines
 
 logger = logging.getLogger(__name__)
 
@@ -118,3 +120,63 @@ async def run_scan(ctx: dict, scan_id: int) -> str:
         session.add(scan)
         await session.commit()
         return scan.status
+
+
+# --------------------------------------------------------------------------- #
+# v0.3 "Défense" jobs — sensor ingestion (#1) and retention purge (#5)
+# --------------------------------------------------------------------------- #
+
+
+def _ingest_state_key(eve_path: str) -> str:
+    """Cursor identity: one offset per EVE file."""
+    return f"suricata:eve:{eve_path}"
+
+
+async def ingest_eve(ctx: dict | None = None, path: str | None = None) -> dict:
+    """Tail the Suricata EVE file, persist new events and run detection.
+
+    Designed to be called every 15 s by the worker cron. It is safe to call on
+    a machine with no sensor at all: a missing file is reported, not raised.
+    """
+    eve_path = path or settings.SURICATA_EVE_PATH
+    key = _ingest_state_key(eve_path)
+
+    async with _WorkerSession() as session:
+        state = await session.get(IngestState, key)
+        result = read_new_lines(
+            eve_path,
+            offset=state.offset if state else 0,
+            inode=state.inode if state else 0,
+        )
+
+        if result.missing:
+            return {"status": "skipped", "reason": "eve file not found", "path": eve_path}
+
+        events = normalize_events(result.lines)
+        summary = await ingest_events(session, events)
+
+        if state is None:
+            state = IngestState(key=key, offset=result.offset, inode=result.inode)
+        else:
+            state.offset = result.offset
+            state.inode = result.inode
+            state.updated_at = utcnow()
+        session.add(state)
+        await session.commit()
+
+    summary.update(
+        {
+            "status": "ok",
+            "path": eve_path,
+            "rotated": result.rotated,
+            "cursor": result.offset,
+        }
+    )
+    return summary
+
+
+async def purge_expired_data(ctx: dict | None = None, retention_days: int | None = None) -> dict:
+    """Delete findings/alerts/sensor events older than ``RETENTION_DAYS`` (#5)."""
+    days = settings.RETENTION_DAYS if retention_days is None else retention_days
+    async with _WorkerSession() as session:
+        return await retention.purge_expired(session, days)

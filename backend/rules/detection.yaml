@@ -1,0 +1,48 @@
+# Sentinelle — règles de détection (v0.3, issue #2)
+#
+# Ce fichier est LA source des règles : on en ajoute une sans toucher au code.
+# Rechargé à chaque cycle d'ingestion (worker) — modifier puis attendre le
+# prochain passage, ou redémarrer le worker.
+#
+# Champs communs
+#   name            identifiant unique de la règle
+#   kind            moteur à utiliser : port_scan | ssh_bruteforce | beaconing
+#   severity        info | low | medium | high | critical
+#   window_seconds  fenêtre glissante d'observation
+#   threshold       seuil de déclenchement (nombre)
+#   description     explication lisible (reprise dans la documentation)
+#
+# Champs spécifiques
+#   min_samples     (beaconing) nombre minimal de connexions pour tester la régularité
+#   max_interval_cv (beaconing) coefficient de variation toléré des intervalles
+version: 1
+
+rules:
+  - name: port_scan
+    kind: port_scan
+    severity: high
+    window_seconds: 60
+    threshold: 20
+    description: >
+      Une même source contacte plus de 20 ports de destination distincts en 60 s :
+      signature classique d'un balayage de ports.
+
+  - name: ssh_bruteforce
+    kind: ssh_bruteforce
+    severity: high
+    window_seconds: 300
+    threshold: 10
+    description: >
+      Plus de 10 tentatives de connexion SSH depuis une même source vers une même
+      destination en 5 min : force brute.
+
+  - name: beaconing
+    kind: beaconing
+    severity: medium
+    window_seconds: 3600
+    threshold: 5
+    min_samples: 5
+    max_interval_cv: 0.25
+    description: >
+      Au moins 5 connexions vers la même destination à intervalle régulier
+      (coefficient de variation ≤ 0,25) : balise de commande et contrôle.

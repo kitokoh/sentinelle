@@ -10,19 +10,19 @@ interface.
 - Scans nmap async (worker isolé), constats structurés, dashboard temps réel
 - Docker Compose, CI GitHub Actions, docs (archi, doctrine, règles d'engagement)
 
-## v0.2 — Audit vulnérabilités
+## ✅ v0.2 — Audit vulnérabilités
 
-- [ ] Intégration **nuclei** dans le worker (templates communautaires)
-- [ ] Correspondance service/version → **CVE** (API NVD)
-- [ ] Score de risque par cible et par scan
-- [ ] Export CSV des constats
+- [x] Intégration **nuclei** dans le worker (templates communautaires)
+- [x] Correspondance service/version → **CVE** (API NVD)
+- [x] Score de risque par cible et par scan
+- [x] Export CSV des constats
 
-## v0.3 — Défense (le virage stratégique)
+## ✅ v0.3 — Défense (le virage stratégique)
 
-- [ ] Ingestion **Suricata / Zeek** (capteur réseau dans le lab) → alertes dans
+- [x] Ingestion **Suricata / Zeek** (capteur réseau dans le lab) → alertes dans
       le même dashboard
-- [ ] Règles de détection simples (scan de port, brute force SSH, beaconing)
-- [ ] Migrations Alembic, rétention configurable
+- [x] Règles de détection simples (scan de port, brute force SSH, beaconing)
+- [x] Migrations Alembic, rétention configurable
 
 ## v0.4 — Veille menaces (threat intel)
 

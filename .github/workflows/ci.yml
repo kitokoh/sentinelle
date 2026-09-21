@@ -19,6 +19,52 @@ jobs:
         working-directory: backend
         run: pytest -q
 
+  # v0.3 (#4) — the migration series must be replayable on SQLite *and* PostgreSQL
+  # before a schema change can ever reach a real deployment.
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sentinelle
+          POSTGRES_PASSWORD: sentinelle
+          POSTGRES_DB: sentinelle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sentinelle"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Migrations — SQLite (upgrade / check / replay)
+        working-directory: backend
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./ci-migrations.db
+        run: |
+          alembic upgrade head
+          alembic check
+          alembic downgrade base
+          alembic upgrade head
+
+      - name: Migrations — PostgreSQL (upgrade / check / replay)
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://sentinelle:sentinelle@localhost:5432/sentinelle
+        run: |
+          alembic upgrade head
+          alembic check
+          alembic downgrade base
+          alembic upgrade head
+
   frontend:
     runs-on: ubuntu-latest
     steps:
