@@ -32,6 +32,11 @@ services:
       ENV: production
       # Politique de rétention (#5) : 0 désactive la purge.
       RETENTION_DAYS: 90
+      # Renseignement (#6-#8) — déposer les secrets dans un .env ou un gestionnaire.
+      # MISP_URL: https://misp.example.org
+      # MISP_API_KEY: …
+      # OTX_API_KEY: …
+      CERT_FEEDS: CERT-FR=https://www.cert.ssi.gouv.fr/feed/
     ports:
       - "8000:8000"
     depends_on:
@@ -52,6 +57,11 @@ services:
       # cycle, elle ne tombe jamais en erreur.
       SURICATA_EVE_PATH: /var/log/suricata/eve.json
       RETENTION_DAYS: 90
+      # Renseignement (#6-#8) : mêmes valeurs que l'API.
+      # MISP_URL: https://misp.example.org
+      # MISP_API_KEY: …
+      # OTX_API_KEY: …
+      CERT_FEEDS: CERT-FR=https://www.cert.ssi.gouv.fr/feed/
     volumes:
       - suricata-logs:/var/log/suricata
     depends_on:

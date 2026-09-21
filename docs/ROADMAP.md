@@ -24,11 +24,11 @@ interface.
 - [x] Règles de détection simples (scan de port, brute force SSH, beaconing)
 - [x] Migrations Alembic, rétention configurable
 
-## v0.4 — Veille menaces (threat intel)
+## ✅ v0.4 — Veille menaces (threat intel)
 
-- [ ] Connecteurs flux publics (MISP, AlienVault OTX, CERT-FR)
-- [ ] Corrélation IOC ↔ constats locaux
-- [ ] Carte des campagnes ciblant le pays (page dédiée)
+- [x] Connecteurs flux publics (MISP, AlienVault OTX, CERT-FR)
+- [x] Corrélation IOC ↔ constats locaux
+- [x] Carte des campagnes ciblant le pays (page dédiée)
 
 ## v0.5 — Rapports & gouvernance
 

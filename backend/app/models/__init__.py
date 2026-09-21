@@ -3,6 +3,8 @@
 from app.models.alert import Alert, utcnow
 from app.models.finding import Finding
 from app.models.ingest_state import IngestState
+from app.models.intel_feed_item import IntelFeedItem
+from app.models.ioc import Ioc
 from app.models.scan import Scan
 from app.models.sensor_event import SensorEvent
 from app.models.target import Target
@@ -16,6 +18,8 @@ __all__ = [
     "Alert",
     "SensorEvent",
     "IngestState",
+    "Ioc",
+    "IntelFeedItem",
     # Canonical UTC "now" helper, re-exported so callers need only one import.
     "utcnow",
 ]

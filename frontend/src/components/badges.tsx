@@ -167,6 +167,46 @@ export function ConfidenceBadge({ value }: { value: number | null }) {
   )
 }
 
+/* ---------- Type d'indicateur (v0.4) ---------- */
+
+const IOC_TYPE_LABELS: Record<string, string> = {
+  ip: 'IP',
+  domain: 'Domaine',
+  url: 'URL',
+  md5: 'MD5',
+  sha1: 'SHA1',
+  sha256: 'SHA256',
+  email: 'E-mail',
+}
+
+export function IocTypeBadge({ type }: { type: string }) {
+  const label = IOC_TYPE_LABELS[type] ?? type
+  return (
+    <span className="badge border-slate-700 bg-slate-800 font-mono uppercase text-slate-400">
+      {label}
+    </span>
+  )
+}
+
+/** Provenance d'un indicateur : une pastille par flux qui le rapporte. */
+export function SourceList({ sources }: { sources: string[] }) {
+  if (sources.length === 0) {
+    return <span className="text-xs text-slate-600">—</span>
+  }
+  return (
+    <span className="flex flex-wrap gap-1">
+      {sources.map((source) => (
+        <span
+          key={source}
+          className="inline-flex items-center rounded-full border border-slate-700 bg-slate-800/70 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-slate-300"
+        >
+          {source}
+        </span>
+      ))}
+    </span>
+  )
+}
+
 /* ---------- Score de risque (0–100) ---------- */
 
 const RISK_LEVELS: { min: number; label: string; classes: string }[] = [
