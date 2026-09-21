@@ -7,6 +7,7 @@ import TargetsPage from './pages/TargetsPage'
 import ScansPage from './pages/ScansPage'
 import ScanDetailPage from './pages/ScanDetailPage'
 import AlertsPage from './pages/AlertsPage'
+import IntelPage from './pages/IntelPage'
 import ReportsPage from './pages/ReportsPage'
 import DoctrinePage from './pages/DoctrinePage'
 
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="scans" element={<ScansPage />} />
           <Route path="scans/:id" element={<ScanDetailPage />} />
           <Route path="alertes" element={<AlertsPage />} />
+          <Route path="renseignement" element={<IntelPage />} />
           <Route path="rapports" element={<ReportsPage />} />
           <Route path="doctrine" element={<DoctrinePage />} />
         </Route>

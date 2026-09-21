@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import alerts, auth, dashboard, scans, targets
+from app.api import alerts, auth, dashboard, intel, scans, targets
 from app.db import init_db
 
 
@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Sentinelle API",
     description="Sovereign security-audit & cyber-defense demo platform (authorized targets only).",
-    version="0.1.0",
+    version="0.4.0",
     docs_url="/docs",
     lifespan=lifespan,
 )
@@ -42,6 +42,7 @@ app.include_router(targets.router, prefix="/api")
 app.include_router(scans.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
+app.include_router(intel.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["health"])

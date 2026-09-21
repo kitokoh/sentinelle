@@ -47,6 +47,18 @@ dans le secteur public : technique **et** doctrine.
 - 🧹 **Rétention configurable** : purge quotidienne des constats, alertes et
   événements (`RETENTION_DAYS`, 0 = désactivé)
 
+### v0.4 — Renseignement sur les menaces
+
+- 🔌 **Connecteurs** MISP (attributs), AlienVault OTX (pulses) et flux **CERT**
+  RSS/Atom — normalisation commune, dégradation propre si une source est
+  injoignable ([docs/INTEL.md](docs/INTEL.md))
+- 🧩 **Dédoublonnage inter-sources** : un indicateur rapporté par deux flux reste
+  une seule ligne, avec toutes ses provenances
+- 🎯 **Corrélation IoC ↔ observé** : un indicateur retrouvé dans une alerte ou un
+  constat crée une alerte `intel` de sévérité ≥ élevée, signalée une seule fois
+- 🌍 **Page Renseignement** : veille CERT, indicateurs filtrables, correspondances
+  et **carte des campagnes** (coordonnées fournies par les flux uniquement)
+
 ## Stack
 
 | Couche | Choix | Pourquoi |
@@ -107,18 +119,20 @@ La CI rejoue la série complète (upgrade → check → downgrade → upgrade) s
 
 ```
 sentinelle/
-├── backend/            # API FastAPI + worker arq + tests (121 tests)
-│   ├── alembic/        # migrations (0001_initial = schéma v0.2, 0002_defense)
+├── backend/            # API FastAPI + worker arq + tests (182 tests)
+│   ├── alembic/        # migrations (0001 initial, 0002 défense, 0003 renseignement)
 │   ├── rules/          # règles de détection déclaratives (YAML)
 │   └── app/
-│       ├── api/        # routes (auth, targets, scans, dashboard, alerts)
-│       ├── services/   # scope (garde-fou), scanner, detection, ingest, retention
-│       └── worker/     # jobs arq : run_scan, ingest_eve, purge_expired_data
-├── frontend/           # SPA React/TS (dashboard, cibles, scans, alertes, doctrine)
+│       ├── api/        # routes (auth, targets, scans, dashboard, alerts, intel)
+│       ├── services/   # scope, scanner, detection, ingest, retention, intel/
+│       └── worker/     # jobs arq : run_scan, ingest_eve, purge, sync_*, correlate
+├── frontend/           # SPA React/TS (dashboard, cibles, scans, alertes,
+│                       #   renseignement, rapports, doctrine)
 ├── docs/
 │   ├── ARCHITECTURE.md # composants, flux, modèle de données
 │   ├── DETECTION.md    # écrire et régler une règle de détection
-│   ├── ROADMAP.md      # v0.1 → v0.6 (threat intel, rapports PDF, production)
+│   ├── INTEL.md        # brancher MISP / OTX / CERT et comprendre la corrélation
+│   ├── ROADMAP.md      # v0.1 → v0.6 (rapports PDF, RBAC, production)
 │   └── DOCTRINE.md     # le volet stratégique : doctrine cyber nationale
 ├── .github/workflows/  # CI : tests backend, migrations (SQLite + PostgreSQL), build front
 └── docker-compose.yml  # db + redis + api + worker + web (+ capteur en profil `lab`)
@@ -134,10 +148,26 @@ docker compose --profile lab up -d   # ou toute la stack avec le capteur
 Le worker lit `/var/log/suricata/eve.json` toutes les 15 s. Sans capteur, le
 cycle est simplement ignoré : rien ne tombe en erreur.
 
+## Renseignement sur les menaces
+
+Trois sources sont supportées, chacune indépendante et facultative : MISP, OTX
+et les flux d'avis CERT. Configurez ce que vous avez, le reste est marqué
+`skipped` :
+
+```bash
+MISP_URL=https://misp.example.org
+MISP_API_KEY=…
+OTX_API_KEY=…
+CERT_FEEDS=CERT-FR=https://www.cert.ssi.gouv.fr/feed/
+```
+
+Puis, sur la page **Renseignement**, le bouton « Synchroniser » déclenche un
+cycle complet à la demande. Détails et diagnostic : [docs/INTEL.md](docs/INTEL.md).
+
 ## Roadmap
 
-Voir [docs/ROADMAP.md](docs/ROADMAP.md) — prochaine étape : **v0.4** (veille
-menaces : connecteurs MISP / OTX / CERT-FR, corrélation IoC ↔ constats).
+Voir [docs/ROADMAP.md](docs/ROADMAP.md) — prochaine étape : **v0.5** (rapports
+PDF, RBAC fin, journal d'audit, SSO/OIDC, multi-organisation).
 
 ## Licence
 

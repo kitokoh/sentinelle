@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   Crosshair,
   FileText,
+  Globe2,
   Landmark,
   LayoutDashboard,
   LogOut,
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { to: '/cibles', label: 'Cibles', icon: Crosshair, end: false },
   { to: '/scans', label: 'Scans', icon: Radar, end: false },
   { to: '/alertes', label: 'Alertes', icon: Siren, end: false },
+  { to: '/renseignement', label: 'Renseignement', icon: Globe2, end: false },
   { to: '/rapports', label: 'Rapports', icon: FileText, end: false },
   { to: '/doctrine', label: 'Doctrine', icon: Landmark, end: false },
 ] as const
@@ -25,6 +27,7 @@ function currentSection(pathname: string): string {
   if (pathname.startsWith('/cibles')) return 'Cibles'
   if (pathname.startsWith('/scans')) return 'Scans'
   if (pathname.startsWith('/alertes')) return 'Alertes'
+  if (pathname.startsWith('/renseignement')) return 'Renseignement'
   if (pathname.startsWith('/rapports')) return 'Rapports'
   if (pathname.startsWith('/doctrine')) return 'Doctrine'
   return 'Dashboard'
@@ -86,7 +89,7 @@ export default function Layout() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-400/70">
             Diffusion restreinte
           </p>
-          <p className="mt-1 text-xs text-slate-600">v0.3 · Environnement de démonstration</p>
+          <p className="mt-1 text-xs text-slate-600">v0.4 · Environnement de démonstration</p>
         </div>
       </aside>
 

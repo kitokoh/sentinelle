@@ -11,6 +11,11 @@ from app.core.config import get_settings
 from app.models import Finding, IngestState, Scan, Target, utcnow
 from app.services import nvd, retention, scanner
 from app.services.ingest import ingest_events
+from app.services.intel import correlation as intel_correlation
+from app.services.intel import feeds as intel_feeds
+from app.services.intel import misp as intel_misp
+from app.services.intel import otx as intel_otx
+from app.services.intel import store as intel_store
 from app.services.risk import compute_risk_score
 from app.services.suricata import normalize_events, read_new_lines
 
@@ -180,3 +185,82 @@ async def purge_expired_data(ctx: dict | None = None, retention_days: int | None
     days = settings.RETENTION_DAYS if retention_days is None else retention_days
     async with _WorkerSession() as session:
         return await retention.purge_expired(session, days)
+
+
+# --------------------------------------------------------------------------- #
+# v0.4 "Renseignement" jobs — connectors (#6, #7, #8) and correlation (#9)
+# --------------------------------------------------------------------------- #
+
+
+def _disabled(reason: str) -> dict:
+    """Uniform "nothing to do" result, so a skipped job is visible in the logs."""
+    return {"status": "skipped", "reason": reason}
+
+
+async def sync_misp(ctx: dict | None = None) -> dict:
+    """Pull indicators from the configured MISP instance (#6)."""
+    if not settings.MISP_URL or not settings.MISP_API_KEY:
+        return _disabled("MISP_URL/MISP_API_KEY not configured")
+
+    candidates = await intel_misp.fetch_attributes(
+        settings.MISP_URL,
+        settings.MISP_API_KEY,
+        lookback_days=settings.MISP_LOOKBACK_DAYS,
+        limit=settings.MISP_ATTRIBUTE_LIMIT,
+    )
+    async with _WorkerSession() as session:
+        counters = await intel_store.upsert_iocs(session, candidates)
+    counters.update({"status": "ok", "source": "misp"})
+    return counters
+
+
+async def sync_otx(ctx: dict | None = None) -> dict:
+    """Pull subscribed AlienVault OTX pulses (#7)."""
+    if not settings.OTX_API_KEY:
+        return _disabled("OTX_API_KEY not configured")
+
+    candidates = await intel_otx.fetch_pulses(
+        settings.OTX_API_KEY, limit=settings.OTX_PULSE_LIMIT
+    )
+    async with _WorkerSession() as session:
+        counters = await intel_store.upsert_iocs(session, candidates)
+    counters.update({"status": "ok", "source": "otx"})
+    return counters
+
+
+async def sync_cert(ctx: dict | None = None) -> dict:
+    """Aggregate the configured CERT advisory feeds (#8)."""
+    feeds = intel_feeds.parse_feed_spec(settings.CERT_FEEDS)
+    if not feeds:
+        return _disabled("no CERT feed configured")
+
+    items = await intel_feeds.fetch_feeds(feeds, per_feed_limit=settings.CERT_ITEMS_PER_FEED)
+    async with _WorkerSession() as session:
+        counters = await intel_store.upsert_feed_items(session, items)
+    counters.update({"status": "ok", "feeds": [name for name, _ in feeds]})
+    return counters
+
+
+async def correlate_intel(ctx: dict | None = None) -> dict:
+    """Match stored indicators against local alerts and findings (#9)."""
+    async with _WorkerSession() as session:
+        counters = await intel_correlation.correlate_iocs(
+            session, ioc_limit=settings.INTEL_IOC_LIMIT
+        )
+    counters["status"] = "ok"
+    return counters
+
+
+async def run_intel_sync(ctx: dict | None = None) -> dict:
+    """Full intel cycle: every connector, then correlation.
+
+    Enqueued by ``POST /api/intel/sync`` so a demo instance can refresh its
+    intelligence on demand instead of waiting for the cron.
+    """
+    result = {
+        "misp": await sync_misp(ctx),
+        "otx": await sync_otx(ctx),
+        "cert": await sync_cert(ctx),
+    }
+    result["correlation"] = await correlate_intel(ctx)
+    return result

@@ -33,7 +33,7 @@ flowchart LR
 | `api` | Auth JWT, CRUD cibles/scans, stats, alertes, **validation de périmètre** | stateless, sans nmap |
 | `worker` | Scans nmap/nuclei, **ingestion EVE + moteur de détection**, purge de rétention | conteneur dédié, seul à avoir nmap |
 | `sensor` | Suricata du lab, écrit `eve.json` dans un volume partagé | profil `lab`, `NET_ADMIN` |
-| `db` | Persistance (utilisateurs, cibles, scans, constats, alertes, événements) | volume `pgdata` |
+| `db` | Persistance (utilisateurs, cibles, scans, constats, alertes, événements, IoC, avis) | volume `pgdata` |
 | `redis` | File de jobs arq (scans) + planification des jobs périodiques | éphémère |
 
 Séparation volontaire : **l'API ne sait pas scanner**. Le binaire nmap n'existe
@@ -65,11 +65,13 @@ valeur (ip|cidr|hostname)
 - **Alert** (v0.3) `id, created_at, source(suricata|rule|intel), event_type, severity, src/dst ip+port, rule_name, confidence, occurrences, dedup_key, signature, detail, payload, status(new|ack), acknowledged_at/by`
 - **SensorEvent** (v0.3) `id, event_id(unique), occurred_at, event_type, src/dst ip+port, proto, app_proto, signature, payload`
 - **IngestState** (v0.3) curseur `key, offset, inode` — rend le tail idempotent
+- **Ioc** (v0.4) `id, type(ip|domain|url|md5|sha1|sha256|email), value, sources, severity, first_seen, last_seen, metadata_json` — **unique sur `(type, value)`**
+- **IntelFeedItem** (v0.4) `id, guid(unique), source, title, link, summary, published_at`
 
 Le schéma est versionné par **Alembic** (`backend/alembic/versions/`) :
 `0001_initial` reproduit le schéma v0.2, `0002_defense` ajoute les trois tables
-de la défense. `alembic check` est exécuté en CI — toute dérive entre modèles et
-migrations échoue la construction.
+de la défense, `0003_intel` celles du renseignement. `alembic check` est exécuté
+en CI — toute dérive entre modèles et migrations échoue la construction.
 
 ## Flux défensif (v0.3)
 
@@ -98,6 +100,34 @@ Deux propriétés structurent ce flux :
    d'alertes. Le détail des règles et de la confiance est dans
    [DETECTION.md](DETECTION.md).
 
+## Flux de renseignement (v0.4)
+
+```
+MISP ─┐                          normalisation commune
+OTX  ─┼─▶ connecteurs ──▶ candidate(type, value, source, sévérité, metadata)
+CERT ─┘                                   │
+                                          ▼
+                        `iocs`  — unique sur (type, value) :
+                                  un même indicateur vu par deux flux
+                                  = une ligne, `sources` = "misp,otx"
+                                          │
+                     alertes + constats ──┼──▶ corrélation
+                                          ▼
+                        `alerts` source="intel", sévérité ≥ high,
+                        une seule fois par couple (indicateur, entité)
+```
+
+Deux choix structurent ce flux :
+
+1. **La clé d'unicité est l'indicateur, pas la source.** Sans cela, le corrélateur
+   signalerait deux fois la même chose. La provenance est une liste, pas une ligne.
+2. **Un connecteur ne fait jamais échouer un cycle.** Source injoignable ou
+   non configurée → 0 indicateur et une ligne de journal (`status: skipped`),
+   jamais une exception. Une plateforme souveraine ne dépend pas de la
+   disponibilité d'un tiers pour démarrer.
+
+Détails de configuration et de réglage : [INTEL.md](INTEL.md).
+
 ## Flux d'un scan
 
 1. `POST /api/scans {target_id, profile}` — 403 si cible `denied`
@@ -124,3 +154,5 @@ Deux propriétés structurent ce flux :
 - Mono-tenant. Multi-organisation + RBAC fin en v0.5.
 - Les alertes sont globales (pas encore cloisonnées par organisation) : la vue
   SOC est unique, ce qui est le comportement attendu en v0.3.
+- La carte des campagnes n'affiche que les coordonnées fournies par les flux :
+  aucun indicateur n'est envoyé à un service de géolocalisation tiers.
