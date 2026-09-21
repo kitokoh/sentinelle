@@ -59,6 +59,21 @@ dans le secteur public : technique **et** doctrine.
 - 🌍 **Page Renseignement** : veille CERT, indicateurs filtrables, correspondances
   et **carte des campagnes** (coordonnées fournies par les flux uniquement)
 
+### v0.6 — Durcissement production
+
+- 📈 **Monitoring Prometheus + Grafana** : `/metrics` (débit, latences, détections,
+  renseignement), tableau de bord versionné, règles d'alerte dont
+  **worker injoignable > 5 min** ([docs/MONITORING.md](docs/MONITORING.md))
+- 🔒 **Chiffrement au repos** : `findings.detail` et `alerts.payload` chiffrés en
+  Fernet, transparents pour l'API, avec procédure de rotation outillée
+  ([docs/SECRETS.md](docs/SECRETS.md))
+- 🤫 **Secrets externalisés** : SOPS+age (ou Vault), aucun secret committé,
+  **gitleaks en CI** sur l'arbre *et* l'historique
+- ☸️ **Chart Helm** (`helm/sentinelle/`) : api, worker, web, Redis de démonstration,
+  PostgreSQL externe, sondes, ressources, HPA, PDB
+- 💾 **PRA outillé** : `pg_dump` chiffré, procédure de restauration **avec exercice
+  obligatoire**, scripts de charge k6 ([docs/PRA.md](docs/PRA.md))
+
 ### v0.5 — Rapports & gouvernance
 
 - 📄 **Rapports PDF** : synthèse dirigeant (score, points saillants,
@@ -135,7 +150,7 @@ La CI rejoue la série complète (upgrade → check → downgrade → upgrade) s
 
 ```
 sentinelle/
-├── backend/            # API FastAPI + worker arq + tests (248 tests)
+├── backend/            # API FastAPI + worker arq + tests (326 tests)
 │   ├── alembic/        # migrations (initial, défense, renseignement, gouvernance)
 │   ├── rules/          # règles de détection déclaratives (YAML)
 │   └── app/
@@ -147,9 +162,18 @@ sentinelle/
 │       └── worker/     # jobs arq : run_scan, ingest_eve, purge, sync_*, correlate
 ├── frontend/           # SPA React/TS (dashboard, cibles, scans, alertes,
 │                       #   renseignement, rapports, journal, doctrine)
-├── deploy/keycloak/    # realm SSO de démonstration (#14)
+├── deploy/
+│   ├── keycloak/       # realm SSO de démonstration (#14)
+│   ├── monitoring/     # Prometheus, règles d'alerte, tableau de bord Grafana (#19)
+│   ├── secrets/        # configuration SOPS + age, gabarit de secrets (#17)
+│   ├── backup/         # sauvegarde et restauration PostgreSQL (#20)
+│   └── load/           # scénario de charge k6 (#20)
+├── helm/sentinelle/    # chart Kubernetes (#16)
 ├── docs/
 │   ├── ARCHITECTURE.md # composants, flux, modèle de données
+│   ├── MONITORING.md   # métriques, tableau de bord, runbooks d'alerte
+│   ├── SECRETS.md      # inventaire des secrets et procédures de rotation
+│   ├── PRA.md          # plan de reprise, RPO/RTO, exercices de restauration
 │   ├── DETECTION.md    # écrire et régler une règle de détection
 │   ├── INTEL.md        # brancher MISP / OTX / CERT et comprendre la corrélation
 │   ├── RBAC.md         # matrice des rôles et frontières entre organisations
@@ -210,8 +234,50 @@ Détails du flux OIDC et diagnostic : [docs/SSO.md](docs/SSO.md).
 
 ## Roadmap
 
-Voir [docs/ROADMAP.md](docs/ROADMAP.md) — prochaine étape : **v0.6** (chart Helm,
-secrets externalisés, chiffrement au repos, monitoring Prometheus/Grafana, PRA).
+Voir [docs/ROADMAP.md](docs/ROADMAP.md) — les six versions (v0.1 → v0.6) sont
+livrées. Suite possible : multi-capteurs par organisation, KEDA sur la profondeur
+de file, et un mode de collecte *pull* pour l'ingestion Suricata.
+
+## Supervision
+
+```bash
+make monitoring        # Prometheus (9090) + Grafana (3001), tableau de bord chargé
+curl -s localhost:8000/metrics | head        # exposition Prometheus
+curl -s localhost:8000/api/health/dependencies | jq   # état des workers
+```
+
+L'alerte qui compte : `SentinelleWorkerDown`, au bout de **5 minutes** sans
+battement de cœur. Dans une architecture à file d'attente, un worker arrêté est la
+panne la plus silencieuse — l'API répond, la file se remplit, rien ne se traite.
+Détails et runbooks : [docs/MONITORING.md](docs/MONITORING.md).
+
+## Secrets
+
+Aucun secret n'est committé : la CI exécute **gitleaks** sur l'arbre de travail et
+sur l'historique. En déploiement, les valeurs viennent de l'environnement
+(`${VAR:-défaut}` en Compose), d'un `existingSecret` en Kubernetes, ou d'un fichier
+chiffré SOPS+age :
+
+```bash
+./scripts/secrets.sh init        # génère les valeurs aléatoires et les chiffre
+eval "$(./scripts/secrets.sh export)"
+```
+
+Inventaire complet et procédures de rotation : [docs/SECRETS.md](docs/SECRETS.md).
+Le cas délicat — `FIELD_ENCRYPTION_KEY` — dispose d'un script de re-chiffrement
+en place qui **refuse de détruire** une donnée qu'il ne peut pas ouvrir.
+
+## Reprise d'activité
+
+| Objectif | Cible | Comment |
+|---|---|---|
+| **RPO** | **24 h** | `pg_dump` quotidien (`deploy/backup/backup.sh`), rétention configurable |
+| **RTO** | **2 h** | restauration `pg_restore` + redémarrage de la pile, procédure dans [docs/PRA.md](docs/PRA.md) |
+
+Ces valeurs sont des **objectifs d'ingénierie**, pas des mesures : aucun exercice de
+restauration n'a encore été exécuté sur une infrastructure cible (le tableau de
+suivi de `docs/PRA.md` est vide). Atteindre un RPO de quelques minutes demande une
+réplication en continu ou du PITR, hors du périmètre du démonstrateur.
 
 ## Licence
 

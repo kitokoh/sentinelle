@@ -1,0 +1,43 @@
+{{/*
+Mise à l'échelle automatique — désactivée par défaut.
+
+Chaque composant est géré séparément car leur charge n'a rien à voir :
+
+  * api / web : corrélés au CPU. Ce sont des services sans état, le HPA peut
+    ajouter ou retirer des réplicas sans précaution particulière ;
+  * worker : le CPU est un mauvais signal (un scan réseau passe son temps à
+    attendre le réseau). Le bon indicateur est la profondeur de la file arq dans
+    Redis, que le HPA natif ne sait pas lire — d'où `autoscaling.worker.enabled`
+    à false et le renvoi vers KEDA dans README.md.
+
+Quand `autoscaling.enabled` est vrai, les Deployments concernés ne fixent plus
+`replicas` : laisser les deux se contredire produirait un aller-retour à chaque
+réconciliation.
+*/}}
+{{- if .Values.autoscaling.enabled }}
+{{- range $component := list "api" "web" "worker" }}
+{{- if (index $.Values.autoscaling $component).enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "sentinelle.componentName" (dict "root" $ "component" $component) }}
+  labels:
+    {{- include "sentinelle.componentLabels" (dict "root" $ "component" $component) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "sentinelle.componentName" (dict "root" $ "component" $component) }}
+  minReplicas: {{ $.Values.autoscaling.minReplicas }}
+  maxReplicas: {{ $.Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $.Values.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}
+{{- end }}

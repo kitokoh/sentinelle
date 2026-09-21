@@ -1,0 +1,104 @@
+{{/*
+Redis « de démonstration ».
+
+AVERTISSEMENT ASSUMÉ — ce Redis n'est pas un Redis de production : un seul
+réplica, aucune réplication, aucune persistance (--save "" --appendonly no),
+aucune authentification, pas de PodDisruptionBudget. Il perd ses données au
+redémarrage du pod, ce qui est acceptable ici car il ne porte que la file des
+scans en attente et l'état éphémère des jobs arq.
+
+Deux voies pour la production, détaillées dans README.md :
+  * ajouter la sous-charte officielle :
+      helm repo add bitnami https://charts.bitnami.com/bitnami
+      # puis, dans Chart.yaml : dependencies: [{name: redis, ...}]
+      # et : helm dependency update ./helm/sentinelle
+    (aucune dépendance n'est déclarée ici : la vendre exigerait un accès réseau
+    et un `helm dependency update` au moment du packaging, ce qu'un runner CI
+    hors ligne ne peut pas faire) ;
+  * ou pointer vers un Redis managé avec `redis.enabled=false` et
+    `redis.external.host`.
+
+La sonde de vivacité `redis-cli ping` est celle recommandée par l'image
+officielle : elle distingue un processus vivant d'un processus bloqué sur un
+fork de sauvegarde, ce que ne ferait pas un simple test de port TCP.
+*/}}
+{{- if .Values.redis.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sentinelle.redisName" . }}
+  labels:
+    {{- include "sentinelle.componentLabels" (dict "root" . "component" "redis") | nindent 4 }}
+spec:
+  replicas: 1
+  # un Redis sans persistance ne peut pas être mis à l'échelle ici : une
+  # seconde instance serait un second broker, pas un réplica.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "sentinelle.componentSelectorLabels" (dict "root" . "component" "redis") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sentinelle.componentLabels" (dict "root" . "component" "redis") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "sentinelle.podSecurityContext" (dict "root" . "component" "redis") | nindent 8 }}
+      containers:
+        - name: redis
+          image: {{ include "sentinelle.image" (dict "repository" .Values.redis.image.repository "tag" .Values.redis.image.tag "appVersion" .Chart.AppVersion) | quote }}
+          imagePullPolicy: {{ include "sentinelle.imagePullPolicy" (dict "root" . "component" "redis") }}
+          securityContext:
+            {{- include "sentinelle.containerSecurityContext" (dict "root" . "component" "redis") | nindent 12 }}
+          # Persistance désactivée volontairement : sans volume, un snapshot sur
+          # disque serait perdu de toute façon, et le bruit des forks de
+          # sauvegarde n'apporte rien à une file de jobs.
+          args:
+            - redis-server
+            - --save
+            - ""
+            - --appendonly
+            - "no"
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources.redis | nindent 12 }}
+          volumeMounts:
+            # readOnlyRootFilesystem=true : Redis n'a besoin que d'un /data
+            # inscriptible, fourni en emptyDir.
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sentinelle.redisName" . }}
+  labels:
+    {{- include "sentinelle.componentLabels" (dict "root" . "component" "redis") | nindent 4 }}
+spec:
+  type: {{ .Values.redis.service.type }}
+  ports:
+    - name: redis
+      port: {{ .Values.redis.service.port }}
+      targetPort: redis
+      protocol: TCP
+  selector:
+    {{- include "sentinelle.componentSelectorLabels" (dict "root" . "component" "redis") | nindent 4 }}
+{{- end }}

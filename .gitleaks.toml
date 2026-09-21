@@ -1,0 +1,30 @@
+# Configuration gitleaks — Sentinelle (v0.6, issue #17)
+#
+# Objectif : la CI échoue si un secret est committé, et elle ne doit pas crier au
+# loup sur les valeurs de démonstration. Chaque exception ci-dessous a été
+# examinée une par une ; aucune ne couvre une valeur réellement secrète.
+#
+# Vérification locale :
+#   gitleaks detect --no-git --source . --config .gitleaks.toml --redact
+
+title = "Sentinelle — détection de secrets committés"
+
+[extend]
+# On conserve toutes les règles par défaut (AWS, clés privées, jetons GitHub…) :
+# n'activer que nos propres règles serait une régression de couverture.
+useDefault = true
+
+[allowlist]
+description = """
+Exceptions, toutes justifiées :
+  * `backend/.env.example` ne contient que des NOMS de variables, jamais de valeur ;
+  * `OTX_PULSE_LIMIT=20` est un compteur de pulses, que la règle générique prend
+    pour une clé parce que la ligne précédente mentionne « API OTX ».
+"""
+# Le fichier d'exemple est un gabarit : il liste les variables attendues, sans
+# jamais en fournir la valeur. C'est aussi le cas des .env.example par convention.
+paths = ['''^backend/\.env\.example$''']
+
+# Le faux positif documenté ci-dessus. Ciblé sur le secret capturé, pas sur le
+# fichier : une vraie clé dans le même fichier resterait détectée.
+regexes = ['''^OTX_PULSE_LIMIT=20$''']

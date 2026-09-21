@@ -25,7 +25,7 @@ from app.api.deps import analyst_required, get_current_org_id, get_current_user,
 from app.core.config import get_settings
 from app.db import get_session
 from app.models import Finding, Scan, Target, User
-from app.services import reports
+from app.services import metrics, reports
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 
@@ -118,6 +118,8 @@ async def create_scan(
     session.add(scan)
     await session.commit()
     await session.refresh(scan)
+
+    metrics.record_scan(scan.profile)
 
     redis = await arq.create_pool(RedisSettings.from_dsn(get_settings().REDIS_URL))
     try:

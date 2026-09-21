@@ -69,6 +69,20 @@ valeur (ip|cidr|hostname)
 - **IntelFeedItem** (v0.4) `id, guid(unique), source, title, link, summary, published_at`
 - **Organization** (v0.5) `id, name, slug` — la frontière de tenant ; la ligne `id = 1` est créée par la migration
 - **AuditLog** (v0.5) `id, created_at, actor_id, actor_email, org_id, action, method, path, status_code, entity, entity_id, ip, user_agent, detail`
+- **WorkerHeartbeat** (v0.6) `name, last_seen_at, detail` — preuve de vie du worker
+
+### Chiffrement au repos (v0.6)
+
+`findings.detail` et `alerts.payload` sont déclarés en `EncryptedText`, un
+`TypeDecorator` qui chiffre à l'écriture et déchiffre à la lecture. Le modèle,
+l'API et tous les appelants continuent de manipuler des chaînes en clair : c'est
+ce qui rend la mesure introduisible sans toucher un seul appelant.
+
+**Conséquence structurelle à connaître** : un champ chiffré **n'est plus
+interrogeable en SQL**. La corrélation de renseignement (#9) matchait les
+constats avec un `LIKE` sur `detail` ; elle charge désormais une fenêtre bornée de
+constats et compare en mémoire. Toute nouvelle recherche sur un de ces champs
+devoir passer par le même chemin.
 
 Depuis la v0.5, `users`, `targets`, `scans` et `findings` portent un `org_id`
 non nul ; `alerts.org_id` est **nullable** et `NULL` signifie *plateforme* (flux
@@ -149,6 +163,9 @@ requête ─┬─▶ dépendance de rôle        (deps.py)      → 401 / 403
 | RBAC | `api/deps.py`, `core/roles.py` | Refus **fail closed** : un rôle inconnu vaut lecteur |
 | Isolation | `org_id` sur les tables + filtres | Une ressource d'un autre tenant répond 404, jamais 403 |
 | Audit | `services/audit.py` + middleware | Aucune route ne peut oublier de journaliser ; aucun corps de requête n'est stocké |
+| Chiffrement | `models/columns.py` (`EncryptedText`) + `services/crypto.py` | Les colonnes sensibles sont chiffrées en base, transparentes pour l'API |
+| Métriques | `services/metrics.py` + middleware | Le label `route` est un *template* de chemin, jamais l'URL brute |
+| Battement de cœur | `worker_heartbeats` + job d'ingestion | « Worker arrêté » devient observable au lieu d'être silencieux |
 
 Le journal d'audit est **append-only** : aucune route d'écriture n'existe, et la
 purge de rétention ne le touche pas. Une action est le seul moyen d'y ajouter une

@@ -14,9 +14,10 @@ what the front-end counter and the ``PATCH /api/alerts/{id}`` route act upon.
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Column, Text
+from sqlalchemy import Column
 from sqlmodel import Field, SQLModel
-from app.models.columns import utc_datetime_column
+
+from app.models.columns import EncryptedText, utc_datetime_column
 
 #: Lifecycle of an alert. Kept as plain strings so the column stays portable.
 ALERT_STATUSES = ("new", "ack")
@@ -58,7 +59,8 @@ class Alert(SQLModel, table=True):
     signature: Optional[str] = None
     detail: str = Field(default="")
     #: Raw source event (JSON text) kept for forensics/investigation.
-    payload: str = Field(default="", sa_column=Column(Text))
+    #: Encrypted at rest (#18): it is the full EVE record.
+    payload: str = Field(default="", sa_column=Column(EncryptedText))
 
     status: str = Field(default="new", index=True)
     acknowledged_at: Optional[datetime] = Field(default=None, sa_column=utc_datetime_column(nullable=True))

@@ -1,0 +1,47 @@
+{{/*
+Ingress — désactivé par défaut.
+
+Tout est routé vers le Service web ; c'est nginx qui répartit ensuite /api vers
+l'API. Un seul hôte, un seul certificat, et la SPA comme l'API partagent la même
+origine (donc pas de configuration CORS côté navigateur).
+Le gating `ingress.enabled` évite d'imposer un contrôleur d'Ingress aux clusters
+qui exposent autrement (Gateway API, LoadBalancer de Service…).
+*/}}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "sentinelle.fullname" . }}
+  labels:
+    {{- include "sentinelle.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                # Le chemin déclare le composant cible ("web" ou "api") : on
+                # résout le nom réel plutôt que de recopier un nom en dur, qui
+                # se désynchroniserait dès qu'on renomme la release.
+                name: {{ include "sentinelle.componentName" (dict "root" $ "component" .service) }}
+                port:
+                  number: {{ if eq .service "api" }}{{ $.Values.api.service.port }}{{ else }}{{ $.Values.web.service.port }}{{ end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

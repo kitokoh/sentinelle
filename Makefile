@@ -1,4 +1,4 @@
-.PHONY: up down logs seed test migrate migration sensor sso rules dev-api dev-web dev-worker
+.PHONY: up down logs seed test migrate migration sensor sso monitoring secrets-init secrets-edit secrets-export rotate-key rules dev-api dev-web dev-worker
 
 up:            ## Build et lance toute la stack
 	docker compose up -d --build
@@ -26,6 +26,23 @@ sensor:        ## Démarre le capteur Suricata du lab (profil `lab`)
 
 sso:           ## Démarre Keycloak (profil `sso`) — nécessite SENTINELLE_CLIENT_SECRET
 	docker compose --profile sso up -d keycloak
+
+monitoring:    ## Démarre Prometheus + Grafana (profil `monitoring`)
+	docker compose --profile monitoring up -d prometheus grafana
+
+secrets-init:  ## Crée le fichier de secrets chiffre (SOPS + age)
+	./scripts/secrets.sh init
+
+secrets-edit:  ## Modifie les secrets chiffrés
+	./scripts/secrets.sh edit
+
+secrets-export:## Émet les export VAR=… pour la session courante (à évaluer)
+	./scripts/secrets.sh export
+
+rotate-key:    ## Re-chiffre les champs sensibles vers une nouvelle clé (DRY=1 pour simuler)
+	@test -n "$$FIELD_ENCRYPTION_KEY_OLD" -a -n "$$FIELD_ENCRYPTION_KEY_NEW" || \
+		{ echo "Définir FIELD_ENCRYPTION_KEY_OLD et FIELD_ENCRYPTION_KEY_NEW" >&2; exit 2; }
+	cd backend && python scripts/rotate_field_key.py $(if $(DRY),--dry-run,)
 
 rules:         ## Vérifie que le fichier de règles de détection est valide
 	cd backend && python -c "from app.services.detection import load_rules; \

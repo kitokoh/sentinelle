@@ -1,0 +1,90 @@
+# Règles d'alerte Prometheus — Sentinelle (v0.6, #19)
+#
+# Rappel de lecture : `for:` est un anti-rebond, pas le seuil. Le seuil de
+# « worker injoignable » est WORKER_STALE_SECONDS (300 s, soit 5 minutes) : la
+# jauge `sentinelle_worker_up` ne passe à 0 qu'après ce délai, et le `for` ci-dessous
+# n'ajoute qu'une minute de confirmation. Total : ~6 minutes au pire.
+
+groups:
+  - name: sentinelle-disponibilite
+    rules:
+      - alert: SentinelleWorkerDown
+        # Le worker a déjà battu puis s'est tu : l'API répond, la file se remplit,
+        # rien ne consomme. C'est la panne silencieuse typique d'une architecture
+        # à file d'attente.
+        expr: sentinelle_worker_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: worker
+        annotations:
+          summary: "Worker Sentinelle injoignable ({{ $labels.worker }})"
+          description: >-
+            Aucun battement de cœur depuis plus de {{ $value }} période de contrôle
+            (seuil : 5 minutes). Les scans et l'ingestion ne sont plus traités.
+          runbook: "docs/MONITORING.md#worker-injoignable"
+
+      - alert: SentinelleWorkerNeverStarted
+        # Aucune série du tout : le worker n'a jamais démarré, ou l'API ne l'a
+        # jamais vu. `absent()` couvre ce cas que `== 0` ne peut pas voir.
+        expr: absent(sentinelle_worker_up)
+        for: 5m
+        labels:
+          severity: critical
+          component: worker
+        annotations:
+          summary: "Aucun worker n'a jamais signalé sa présence"
+          description: >-
+            Aucune métrique de battement de cœur n'existe. Le worker n'a jamais
+            démarré depuis le début de la collecte.
+          runbook: "docs/MONITORING.md#worker-injoignable"
+
+      - alert: SentinelleApiDown
+        expr: up{job="sentinelle-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API Sentinelle injoignable"
+          description: "Le scrape de /metrics échoue depuis 2 minutes."
+
+  - name: sentinelle-qualite
+    rules:
+      - alert: SentinelleHighErrorRate
+        expr: >-
+          sum(rate(sentinelle_http_requests_total{status=~"5.."}[5m]))
+          / clamp_min(sum(rate(sentinelle_http_requests_total[5m])), 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Plus de 5 % de réponses 5xx sur 5 minutes"
+          description: "Le taux d'erreur serveur dépasse le seuil d'alerte."
+
+      - alert: SentinelleSlowRequests
+        expr: >-
+          histogram_quantile(
+            0.95,
+            sum(rate(sentinelle_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1.5
+        for: 15m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Latence p95 au-dessus de 1,5 s"
+          description: "La latence p95 dégradée dure depuis 15 minutes."
+
+      - alert: SentinelleAlertBacklog
+        # Le travail humain est la ressource rare du SOC : un stock d'alertes non
+        # acquittées qui monte est un signal d'organisation, pas de machine.
+        expr: sentinelle_alerts_unacknowledged > 100
+        for: 30m
+        labels:
+          severity: warning
+          component: soc
+        annotations:
+          summary: "Plus de 100 alertes non acquittées"
+          description: "Le stock d'alertes non traitées dépasse 100 depuis 30 minutes."

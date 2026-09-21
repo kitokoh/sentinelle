@@ -1,0 +1,25 @@
+{{/*
+Service du frontend.
+
+Seul point d'entrée HTTP du namespace : l'Ingress y route tout, et nginx
+répartit ensuite /api vers le Service de l'API.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sentinelle.componentName" (dict "root" . "component" "web") }}
+  labels:
+    {{- include "sentinelle.componentLabels" (dict "root" . "component" "web") | nindent 4 }}
+  {{- with .Values.web.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.web.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.web.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "sentinelle.componentSelectorLabels" (dict "root" . "component" "web") | nindent 4 }}

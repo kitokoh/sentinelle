@@ -49,6 +49,18 @@ class Settings(BaseSettings):
     #: Bound on the indicators considered by one correlation run (#9).
     INTEL_IOC_LIMIT: int = 1000
 
+    # --- v0.6 "Durcissement production" (#16–#20) -------------------------
+    #: Fernet key encrypting sensitive fields at rest (#18). Generate with:
+    #: ``python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"``
+    #: Never committed. Unset -> derived from JWT_SECRET (development only).
+    FIELD_ENCRYPTION_KEY: Optional[str] = None
+    #: Bearer token protecting ``/metrics`` (#19). Unset -> the endpoint is open,
+    #: which is only acceptable when it is not reachable from outside.
+    METRICS_TOKEN: Optional[str] = None
+    #: A worker is considered down when its heartbeat is older than this (#19).
+    WORKER_STALE_SECONDS: int = 300
+    #: Where the SPA is served from, for the SSO redirect (#14).
+
     # --- v0.5 "Rapports & gouvernance" (#12–#15) --------------------------
     #: OIDC / Keycloak single sign-on (#14). All three of the first settings are
     #: required to enable SSO; the rest fall back to sensible defaults.

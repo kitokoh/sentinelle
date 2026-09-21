@@ -1,0 +1,13 @@
+# Source de données provisionnée : Grafana démarre déjà branché sur Prometheus,
+# il n'y a rien à cliquer après un déploiement (v0.6, #19).
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: sentinelle-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s

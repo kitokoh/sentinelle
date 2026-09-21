@@ -11,6 +11,7 @@ from app.models.scan import Scan
 from app.models.sensor_event import SensorEvent
 from app.models.target import Target
 from app.models.user import User
+from app.models.worker_heartbeat import WorkerHeartbeat
 
 __all__ = [
     "User",
@@ -24,6 +25,7 @@ __all__ = [
     "IntelFeedItem",
     "Organization",
     "AuditLog",
+    "WorkerHeartbeat",
     "DEFAULT_ORG_ID",
     # Canonical UTC "now" helper, re-exported so callers need only one import.
     "utcnow",

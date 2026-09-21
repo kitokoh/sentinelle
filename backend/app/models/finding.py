@@ -11,6 +11,7 @@ from typing import Optional
 from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
 
+from app.models.columns import EncryptedText
 from app.models.user import DEFAULT_ORG_ID
 
 
@@ -26,5 +27,6 @@ class Finding(SQLModel, table=True):
     service: str = Field(default="")
     version: str = Field(default="")
     severity: str = Field(default="info")  # info | low | medium | high | critical
-    detail: str = Field(default="", sa_column=Column(Text))
+    #: Encrypted at rest (#18): banners, URLs and versions leak a lot on their own.
+    detail: str = Field(default="", sa_column=Column(EncryptedText))
     source: str = Field(default="nmap")  # nmap | nuclei | nvd

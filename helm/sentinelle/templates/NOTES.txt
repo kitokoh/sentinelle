@@ -1,0 +1,87 @@
+{{- $api := include "sentinelle.componentName" (dict "root" . "component" "api") }}
+{{- $worker := include "sentinelle.componentName" (dict "root" . "component" "worker") }}
+{{- $web := include "sentinelle.componentName" (dict "root" . "component" "web") }}
+{{- $secret := include "sentinelle.secretName" . }}
+Sentinelle {{ .Chart.AppVersion }} — release « {{ .Release.Name }} », namespace « {{ .Release.Namespace }} ».
+
+Merci de lire ces quelques lignes AVANT de conclure que le déploiement est bon :
+plusieurs garde-fous de cette charte supposent des décisions d'exploitation.
+
+1) ORDRE DE DÉMARRAGE — l'API DOIT être déployée avant le worker
+   L'API applique « alembic upgrade head » au premier boot (app/db.py -> init_db).
+   Le worker écrit dans le même schéma : démarré trop tôt, il échouerait sur un
+   schéma incomplet. Après une montée de version, attendez la fin du rollout de
+   l'API avant de redémarrer le worker :
+
+     kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ $api }}
+     kubectl -n {{ .Release.Namespace }} rollout restart deployment/{{ $worker }}
+
+   Corollaire : tant que les migrations vivent dans le démarrage de l'API, gardez
+   « api.replicaCount » à 1 (deux réplicas démarrent la même migration en
+   parallèle). Pour scaler l'API, sortez les migrations dans un Job.
+
+2) BASE DE DONNÉES — PostgreSQL est EXTERNE, rien n'est déployé ici
+{{- if eq .Values.postgresql.host "postgresql" }}
+   ATTENTION : « postgresql.host » vaut encore la valeur de repli
+   (« postgresql »), qui ne correspond à aucune instance. Renseignez l'hôte de
+   votre instance managée avant toute mise en service.
+{{- else }}
+   Cible configurée : {{ .Values.postgresql.username }}@{{ .Values.postgresql.host }}:{{ .Values.postgresql.port }}/{{ .Values.postgresql.database }} (ssl={{ .Values.postgresql.sslMode | default "désactivé" }}).
+{{- end }}
+   Aucun StatefulSet PostgreSQL n'est fourni, volontairement : un SGBD managé
+   est attendu (sauvegardes, PRA, mises à jour de version hors périmètre).
+
+3) SECRET
+{{- if .Values.existingSecret }}
+   La charte référence le Secret EXISTANT « {{ $secret }} » ; elle ne le crée pas.
+   Il doit au minimum porter les clés « postgresql-password » et « jwt-secret »
+   (les autres sont optionnelles : oidc-client-secret, field-encryption-key,
+   metrics-token, misp-api-key, otx-api-key).
+   Exemple de création :
+     kubectl -n {{ .Release.Namespace }} create secret generic {{ $secret }} \
+       --from-literal=postgresql-password="…" \
+       --from-literal=jwt-secret="$(openssl rand -hex 32)" \
+       --from-literal=oidc-client-secret="…"
+{{- else }}
+   Mode développement : la charte a créé le Secret « {{ $secret }} » à partir
+   des valeurs fournies. Évitez ce mode en production — le contenu du secret est
+   alors visible via « helm get values ». Préférez un Secret externe
+   (Vault, External Secrets, SealedSecret).
+{{- end }}
+   Le jeton de /metrics (#19) n'est JAMAIS placé dans le ConfigMap : il appartient
+   au Secret (clé « metrics-token »). Sans lui, /metrics reste ouvert — ne
+   l'exposez pas hors du cluster.
+
+{{- if .Values.redis.enabled }}
+
+4) REDIS — l'instance déployée est une AIDE À LA DÉMONSTRATION
+   Un seul pod, sans réplication, sans persistance et sans authentification :
+   ses données disparaissent à chaque redémarrage. C'est acceptable pour la file
+   de scans, pas pour la production. Pour passer en production :
+     * soit une instance managée : redis.enabled=false + redis.external.host=<hôte> ;
+     * soit la sous-charte officielle :
+         helm repo add bitnami https://charts.bitnami.com/bitnami
+       puis ajoutez la dépendance « redis » dans helm/sentinelle/Chart.yaml et
+       lancez « helm dependency update helm/sentinelle ».
+{{- else }}
+
+4) REDIS — instance externe attendue à l'adresse « {{ .Values.redis.external.host | default "<VIDE : à renseigner !>" }}:{{ .Values.redis.external.port }} »
+{{- end }}
+
+5) ACCÈS À L'INTERFACE
+{{- if .Values.ingress.enabled }}
+   Ingress activé : http{{ if .Values.ingress.tls }}s{{ end }}://{{ (first .Values.ingress.hosts).host }}/
+{{- else }}
+   Aucun Ingress (ingress.enabled=false). Ouvrez un tunnel local :
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ $web }} 8080:{{ .Values.web.service.port }}
+   puis http://localhost:8080 — le frontend proxifie /api vers le Service API.
+{{- end }}
+
+6) COMPTES DE SERVICE
+   Les pods n'exposent pas le jeton d'API Kubernetes (automountServiceAccountToken=false).
+   L'application ne parle pas à l'API du cluster : rien à monter.
+
+État des ressources :
+
+  kubectl -n {{ .Release.Namespace }} get deploy,svc,ingress,hpa,pdb \
+    -l app.kubernetes.io/instance={{ .Release.Name }}

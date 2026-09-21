@@ -3,6 +3,8 @@
 import os
 import tempfile
 
+from cryptography.fernet import Fernet
+
 # Must be set BEFORE app modules are imported (the engine is built at import time).
 #
 # `setdefault`, not assignment: CI runs this same suite against PostgreSQL as
@@ -13,6 +15,10 @@ _TMPDIR = tempfile.mkdtemp(prefix="sentinelle-test-")
 os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_TMPDIR}/test.db")
 os.environ["JWT_SECRET"] = "test-secret-not-for-production"
 os.environ["ENV"] = "test"
+# One encryption key for the whole session (#18). Rows written by one test must be
+# readable by the next: a per-test key would make the shared database a jumble of
+# mutually unreadable ciphertexts, and the key-rotation tests impossible.
+os.environ.setdefault("FIELD_ENCRYPTION_KEY", Fernet.generate_key().decode())
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

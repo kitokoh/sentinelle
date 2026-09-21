@@ -1,0 +1,109 @@
+{{/*
+Déploiement du worker asynchrone (arq + nmap + nuclei).
+
+POURQUOI PAS DE SERVICE NI DE SONDE HTTP : le worker n'ouvre aucun port. Il
+consomme la file arq dans Redis ; son état de santé ne se lit pas sur une
+interface réseau. On ne lui colle donc pas de Service (inutile) ni de sonde HTTP
+inventée, ce qui serait un faux signal.
+
+La sonde de vivacité est une sonde `exec` qui vérifie que le processus arq est
+toujours le processus principal du conteneur. Deux détails assumés :
+
+  * `pgrep` (paquet procps) n'est PAS présent dans l'image python:3.12-slim ;
+    une sonde `pgrep -f 'arq app.worker.settings'` échouerait en boucle et
+    ferait redémarrer un worker parfaitement sain. On lit donc /proc/1/cmdline
+    avec des binaires garantis présents (coreutils/grep) ;
+  * si la commande du conteneur est surchargée par un wrapper `sh -c`, PID 1
+    devient le shell mais son argv contient toujours la commande arq : la sonde
+    reste valide.
+
+Le redémarrage sur sortie anormale du processus reste, lui, assuré par le
+kubelet (restartPolicy: Always), indépendamment de cette sonde.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sentinelle.componentName" (dict "root" . "component" "worker") }}
+  labels:
+    {{- include "sentinelle.componentLabels" (dict "root" . "component" "worker") | nindent 4 }}
+spec:
+  {{- if not (and .Values.autoscaling.enabled .Values.autoscaling.worker.enabled) }}
+  replicas: {{ .Values.worker.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "sentinelle.componentSelectorLabels" (dict "root" . "component" "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sentinelle.componentLabels" (dict "root" . "component" "worker") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.worker.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "sentinelle.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "sentinelle.podSecurityContext" (dict "root" . "component" "worker") | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "sentinelle.image" (dict "repository" .Values.worker.image.repository "tag" .Values.worker.image.tag "appVersion" .Chart.AppVersion) | quote }}
+          imagePullPolicy: {{ include "sentinelle.imagePullPolicy" (dict "root" . "component" "worker") }}
+          securityContext:
+            {{- include "sentinelle.containerSecurityContext" (dict "root" . "component" "worker") | nindent 12 }}
+          env:
+            {{- include "sentinelle.commonEnv" (dict "root" .) | nindent 12 }}
+            # Chemin du flux EVE Suricata (#1). Le fichier doit être monté par
+            # `worker.extraVolumes` ; sinon le job d'ingestion saute son cycle,
+            # sans erreur, ce qui est le comportement voulu hors lab.
+            - name: SURICATA_EVE_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "sentinelle.configMapName" . }}
+                  key: SURICATA_EVE_PATH
+            {{- with .Values.worker.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "tr '\\0' ' ' < /proc/1/cmdline | grep -q 'app.worker.settings'"
+            initialDelaySeconds: {{ .Values.worker.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.worker.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.worker.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.worker.probes.liveness.failureThreshold }}
+          resources:
+            {{- toYaml .Values.resources.worker | nindent 12 }}
+          {{- with .Values.worker.extraVolumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          # Un scan nmap/nuclei en cours doit pouvoir se terminer : couper le
+          # worker trop tôt laisse un job arq « en cours » qui ne sera repris
+          # qu'à l'expiration de son bail.
+          terminationGracePeriodSeconds: 120
+      {{- with .Values.worker.extraVolumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

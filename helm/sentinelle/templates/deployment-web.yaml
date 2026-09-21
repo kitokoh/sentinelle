@@ -1,0 +1,105 @@
+{{/*
+Déploiement du frontend (build React servi par nginx).
+
+Le conteneur monte une conf nginx surchargée depuis un ConfigMap : l'image
+embarque un proxy vers le nom docker-compose `api`, inexistant dans un cluster
+(cf. templates/configmap-web-nginx.yaml). Le reste de l'image est utilisé tel
+quel, d'où l'absence de variable d'exécution : le frontend est un ensemble de
+fichiers statiques, tout son paramétrage est fait à la construction.
+
+Les sondes visent `/` : c'est une vraie requête servie par nginx (index.html du
+SPA), pas un endpoint artificiel. Une panne de l'API ne fait donc PAS redémarrer
+le frontend, et c'est voulu : ce sont deux responsabilités distinctes.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sentinelle.componentName" (dict "root" . "component" "web") }}
+  labels:
+    {{- include "sentinelle.componentLabels" (dict "root" . "component" "web") | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.web.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "sentinelle.componentSelectorLabels" (dict "root" . "component" "web") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sentinelle.componentLabels" (dict "root" . "component" "web") | nindent 8 }}
+      annotations:
+        # Un subPath (conf nginx) n'est jamais rafraîchi à chaud : cette
+        # empreinte déclenche un rollout dès que la conf change.
+        checksum/nginx-config: {{ include (print $.Template.BasePath "/configmap-web-nginx.yaml") . | sha256sum }}
+        {{- with .Values.web.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "sentinelle.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "sentinelle.podSecurityContext" (dict "root" . "component" "web") | nindent 8 }}
+      containers:
+        - name: web
+          image: {{ include "sentinelle.image" (dict "repository" .Values.web.image.repository "tag" .Values.web.image.tag "appVersion" .Chart.AppVersion) | quote }}
+          imagePullPolicy: {{ include "sentinelle.imagePullPolicy" (dict "root" . "component" "web") }}
+          securityContext:
+            {{- include "sentinelle.containerSecurityContext" (dict "root" . "component" "web") | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          {{- with .Values.web.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            failureThreshold: {{ .Values.web.probes.startup.failureThreshold }}
+            periodSeconds: {{ .Values.web.probes.startup.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: {{ .Values.web.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.web.probes.readiness.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: {{ .Values.web.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.web.probes.liveness.periodSeconds }}
+          resources:
+            {{- toYaml .Values.resources.web | nindent 12 }}
+          volumeMounts:
+            # subPath : on remplace UNIQUEMENT le fichier default.conf, sans
+            # masquer le reste de /etc/nginx fourni par l'image.
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
+          terminationGracePeriodSeconds: 30
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: {{ include "sentinelle.nginxConfigMapName" . }}
+      {{- with .Values.web.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

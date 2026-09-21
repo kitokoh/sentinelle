@@ -1,0 +1,297 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Vue d'exploitation Sentinelle : santé des composants, trafic API, détections et renseignement. Les métriques proviennent de /metrics (issue #19).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+      "description": "Le worker consomme-t-il la file ? Un worker arrêté n'empêche pas l'API de répondre : c'est la panne silencieuse que ce panneau rend visible.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "red", "index": 1, "text": "ARRÊTÉ" } }, "type": "value" },
+            { "options": { "1": { "color": "green", "index": 0, "text": "ACTIF" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 5, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "min(sentinelle_worker_up)",
+          "legendFormat": "worker",
+          "refId": "A"
+        }
+      ],
+      "title": "Worker",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+      "description": "Âge du dernier battement de cœur, en secondes. Le seuil d'alerte est WORKER_STALE_SECONDS (300 s).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 180 }, { "color": "red", "value": 300 }] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 5, "x": 5, "y": 0 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "time() - max(sentinelle_worker_last_seen_timestamp_seconds)",
+          "legendFormat": "dernier battement",
+          "refId": "A"
+        }
+      ],
+      "title": "Fraîcheur du worker",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+      "description": "Stock d'alertes non acquittées — la charge de travail humaine réelle.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 50 }, { "color": "red", "value": 100 }] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 4, "x": 10, "y": 0 },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "sentinelle_alerts_unacknowledged",
+          "legendFormat": "non acquittées",
+          "refId": "A"
+        }
+      ],
+      "title": "Alertes à traiter",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+      "description": "Indicateurs de compromis détenus et avis CERT collectés : le volume de renseignement disponible pour la corrélation.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 5, "x": 14, "y": 0 },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "sentinelle_iocs_total",
+          "legendFormat": "indicateurs",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "sentinelle_intel_feed_items_total",
+          "legendFormat": "avis CERT",
+          "refId": "B"
+        }
+      ],
+      "title": "Renseignement",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+      "description": "Débit par route (template de chemin, pas l'URL brute : sinon la cardinalité explose).",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 12, "lineWidth": 2, "showPoints": "never" }, "unit": "reqps" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "id": 5,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "sum by (route) (rate(sentinelle_http_requests_total[5m]))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Trafic API par route",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+      "description": "Latence p50 / p95 / p99 toutes routes confondues. Le rapport PDF et l'export CSV sont les points chauds connus.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 8, "lineWidth": 2, "showPoints": "never" }, "unit": "s" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "id": 6,
+      "options": {
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "histogram_quantile(0.5, sum(rate(sentinelle_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(sentinelle_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "histogram_quantile(0.99, sum(rate(sentinelle_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "title": "Latence des requêtes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+      "description": "Taux de réponses 5xx : le seul indicateur de santé qui compte côté utilisateur.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.01 }, { "color": "red", "value": 0.05 }] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 13 },
+      "id": 7,
+      "options": {
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom", "showLegend": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "sum(rate(sentinelle_http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(sentinelle_http_requests_total[5m])), 0.001)",
+          "legendFormat": "taux 5xx",
+          "refId": "A"
+        }
+      ],
+      "title": "Taux d'erreur serveur",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+      "description": "Détections du moteur de règles, par type. Un pic sur port_scan correspond en général à une campagne de reconnaissance du lab.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 20, "lineWidth": 1, "showPoints": "never", "stacking": { "mode": "normal" } }, "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 13 },
+      "id": 8,
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "sum by (rule) (increase(sentinelle_detections_total[1h]))",
+          "legendFormat": "{{rule}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Détections par règle (1 h)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+      "description": "Alertes produites, par source et sévérité : le pouls du volet défensif (capteur, règles locales, corrélation de renseignement).",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 20, "lineWidth": 1, "showPoints": "never", "stacking": { "mode": "normal" } }, "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 13 },
+      "id": 9,
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "sentinelle-prometheus" },
+          "expr": "sum by (source, severity) (increase(sentinelle_alerts_created_total[1h]))",
+          "legendFormat": "{{source}} · {{severity}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Alertes par source et sévérité (1 h)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["sentinelle", "soc", "securite"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Sentinelle — SOC & plateforme",
+  "uid": "sentinelle-overview",
+  "version": 1,
+  "weekStart": ""
+}

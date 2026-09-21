@@ -30,6 +30,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models import Alert, SensorEvent
 from app.services import detection as detection_service
+from app.services import metrics
 from app.services.suricata import severity_from_signature_level
 
 logger = logging.getLogger(__name__)
@@ -173,7 +174,9 @@ async def ingest_events(
         stored += 1
 
         if normalized.get("event_type") == "alert":
-            session.add(_signature_alert(event, normalized))
+            alert = _signature_alert(event, normalized)
+            session.add(alert)
+            metrics.record_alert(alert.source, alert.severity)
             signature_alerts += 1
 
     await session.flush()
@@ -191,12 +194,14 @@ async def ingest_events(
     ).all()
 
     detections = detection_service.evaluate(recent, rules=active_rules, now=moment)
+    metrics.record_detections(detections)
 
     created = 0
     updated = 0
     for det in detections:
         outcome = await _apply_detection(session, det, active_rules, moment)
         if outcome == "created":
+            metrics.record_alert("rule", det.severity)
             created += 1
         else:
             updated += 1

@@ -1,0 +1,37 @@
+# Prometheus — configuration de collecte Sentinelle (v0.6, #19)
+#
+# Le jeton de scrape est lu depuis l'environnement ($METRICS_TOKEN) : aucun secret
+# n'est écrit ici, et le fichier reste versionnable tel quel.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    platform: sentinelle
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # L'API expose /metrics (hors /api) : requêtes, latences, scans, alertes,
+  # indicateurs, et l'état des workers.
+  - job_name: sentinelle-api
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      # Prometheus développe les variables d'environnement : le jeton vient de
+      # METRICS_TOKEN et n'est donc jamais écrit dans ce fichier. Vide au côté
+      # API => /metrics est ouvert (voir docs/MONITORING.md).
+      credentials: ${METRICS_TOKEN}
+    static_configs:
+      - targets: ["api:8000"]
+        labels:
+          component: api
+
+  # Prometheus se surveille lui-même : sans cela, une panne de collecte est
+  # indiscernable d'une absence de trafic.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          component: prometheus

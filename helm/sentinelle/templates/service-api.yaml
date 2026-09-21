@@ -1,0 +1,27 @@
+{{/*
+Service de l'API.
+
+ClusterIP uniquement : l'API n'est jamais exposée directement. Le trafic
+utilisateur entre par l'Ingress -> Service web -> proxy nginx, ce qui évite
+d'ouvrir une seconde surface d'attaque et supprime toute question de CORS.
+C'est aussi le nom vers lequel pointe la conf nginx du frontend.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sentinelle.componentName" (dict "root" . "component" "api") }}
+  labels:
+    {{- include "sentinelle.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+  {{- with .Values.api.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.api.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.api.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "sentinelle.componentSelectorLabels" (dict "root" . "component" "api") | nindent 4 }}

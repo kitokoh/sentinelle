@@ -1,0 +1,14 @@
+# Chargement automatique des tableaux de bord versionnés dans le dépôt.
+apiVersion: 1
+
+providers:
+  - name: sentinelle
+    orgId: 1
+    folder: Sentinelle
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

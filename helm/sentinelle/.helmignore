@@ -1,0 +1,13 @@
+# Fichiers ignorés au packaging de la charte (helm package).
+# On garde la charte légère : pas de sauvegardes d'éditeur ni de valeurs locales
+# qui pourraient embarquer des secrets dans un .tgz distribué.
+.DS_Store
+.git/
+.gitignore
+*.swp
+*.bak
+*.tmp
+*.orig
+values.local.yaml
+*.local.yaml
+README.md.gotmpl
